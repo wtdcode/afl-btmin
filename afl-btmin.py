@@ -139,12 +139,15 @@ if __name__ == "__main__":
         os.makedirs(bt_dir, exist_ok=True)
         
         for bt, fnames in bts.items():
-            bt_id = hash(bt)
+            bt_id = 0
             with open(bt_dir / f"{str(bt_id)}.json", "w+") as f:
                 json.dump(bt, f, indent=4)
 
             for fname in fnames:
+                fname = ",".join([tk for tk in fname.split(",") if 'bt=' not in tk])
                 shutil.move(Path(args.afl) / "crashes" / fname, Path(args.afl) / "crashes" / f"{fname},bt={bt_id}")
+            
+            bt_id += 1
         
     finally:
         shm.close()
