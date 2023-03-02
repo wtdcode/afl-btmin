@@ -47,7 +47,6 @@ logging.basicConfig(level=logging.WARNING, format='[%(asctime)s] %(message)s')
 if __name__ == "__main__":
     p = ArgumentParser("afl-btmin")
     p.add_argument("--afl", required=True, type=str, help="The AFL fuzzing output directory")
-    p.add_argument("--output", required=True, type=str, help="The output directory")
     p.add_argument("--filter", type=str, help="Filter for crashes")
     p.add_argument("--gdb", default=False, action="store_true", help="Enable gdb output")
     p.add_argument("--verbose", default=False, action="store_true", help="Verbose logging")
@@ -135,21 +134,18 @@ if __name__ == "__main__":
                     bts[backtrace].append(fname)
         
         sys.stderr.write(f"{len(bts)} unique backtrace found\n")
-        if not Path(args.output).exists():
-            os.makedirs(args.output)
+
+        bt_dir = Path(args.afl) / "crashes" / "backtraces"
+        os.makedirs(bt_dir, exist_ok=True)
         
-        for idx, bt in enumerate(bts.keys()):
-            dir_path = Path(args.output) / str(idx)
-            if dir_path.exists():
-                logging.warning(f"{dir_path} already exists, content will be overwritten")
-            else:
-                os.makedirs(dir_path)
-            with open(dir_path / "backtrace.json", "w+") as f:
+        for bt, fnames in bts.items():
+            bt_id = hash(bt)
+            with open(bt_dir / f"{str(bt_id)}.json", "w+") as f:
                 json.dump(bt, f, indent=4)
-            
-            for crash in bts[bt]:
-                shutil.copy(Path(args.afl) / "crashes" / crash, dir_path / crash)
+
+            for fname in fnames:
+                shutil.move(Path(args.afl) / "crashes" / fname, Path(args.afl) / "crashes" / f"{fname},bt={bt_id}")
         
     finally:
         shm.close()
-        shm.unlink() # No need to unlink?
+        shm.unlink()
