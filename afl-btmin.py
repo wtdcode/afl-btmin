@@ -29,7 +29,7 @@ if __name__ == "__main__":
         exit(-1)
 
     args = p.parse_args(our_args[1:])
-    shm = SharedMemory(name=SHM_NAME, size=SHM_SIZE)
+    shm = SharedMemory(name=SHM_NAME, create=True, size=SHM_SIZE)
 
     bts: Mapping[Tuple, List[str]]  = {}
 
@@ -82,3 +82,4 @@ if __name__ == "__main__":
                 bts[backtrace].append(fname)
     
     print(f"{len(bts)} unique backtrace found")
+    shm.close()
