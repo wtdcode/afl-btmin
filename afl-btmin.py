@@ -37,6 +37,9 @@ if __name__ == "__main__":
         sys.stderr.write("No program arguments are given!\n")
         exit(-1)
 
+    if our_args is None:
+        our_args = sys.argv
+
     args = p.parse_args(our_args[1:])
 
     if args.verbose:
