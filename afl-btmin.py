@@ -144,8 +144,8 @@ if __name__ == "__main__":
                 json.dump(bt, f, indent=4)
 
             for fname in fnames:
-                fname = ",".join([tk for tk in fname.split(",") if 'bt' not in tk])
-                shutil.move(Path(args.afl) / "crashes" / fname, Path(args.afl) / "crashes" / f"{fname},bt:{bt_id}")
+                new_fname = ",".join([tk for tk in fname.split(",") if 'bt' not in tk])
+                shutil.move(Path(args.afl) / "crashes" / fname, Path(args.afl) / "crashes" / f"{new_fname},bt:{bt_id}")
             
             bt_id += 1
         
