@@ -2,6 +2,7 @@ from gdb.FrameDecorator import FrameDecorator
 import gdb
 import pickle
 import struct
+import binascii
 from itertools import tee
 from multiprocessing.shared_memory import SharedMemory
 
@@ -35,6 +36,7 @@ class FrameFilter():
             bs = pickle.dumps(backtrace)
             self.shm.buf[:8] = struct.pack("<Q", len(bs))
             self.shm.buf[8:len(bs) + 8] = bs
+            print(f"Wrote {len(bs) + 8} bytes: {binascii.hexlify(self.shm.buf[:16])}")
             return it1
         else:
             print("Warning: no shared memory is detected")
