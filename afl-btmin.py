@@ -9,6 +9,8 @@ import os
 import pickle
 import re
 import logging
+import json
+import shutil
 
 SHM_NAME = "afl-btmin-shm"
 SHM_SIZE = (1 << 16)
@@ -17,10 +19,12 @@ logging.basicConfig(level=logging.WARNING, format='[%(asctime)s] %(message)s')
 
 if __name__ == "__main__":
     p = ArgumentParser("afl-btmin")
-    p.add_argument("--output", required=True, type=str, help="The AFL output directory")
+    p.add_argument("--afl", required=True, type=str, help="The AFL fuzzing output directory")
+    p.add_argument("--output", required=True, type=str, help="The output directory")
     p.add_argument("--filter", type=str, help="Filter for crashes")
     p.add_argument("--gdb", default=False, action="store_true", help="Enable gdb output")
     p.add_argument("--verbose", default=False, action="store_true", help="Verbose logging")
+    p.add_argument("--top", default=3, type=int, help="Use top N frames to dedup")
 
     program_args = None
     our_args = None
@@ -42,14 +46,14 @@ if __name__ == "__main__":
     try:
         bts: Mapping[Tuple, List[str]]  = {}
 
-        for fname in os.listdir(Path(args.output) / "crashes"):
-            crash_fname = Path(args.output) / "crashes" / fname
+        for fname in os.listdir(Path(args.afl) / "crashes"):
+            crash_fname = Path(args.afl) / "crashes" / fname
 
             if crash_fname.is_file():
                 
                 if args.filter is not None:
                     if re.match(args.filter, fname) is None:
-                        print(f"{fname} is skipped")
+                        logging.warning(f"{fname} is skipped")
                         continue
 
                 # Write some value to verify it's us
@@ -88,16 +92,30 @@ if __name__ == "__main__":
                     cnt = struct.unpack("<Q", shm.buf[:8])[0]
                     backtrace = pickle.loads(shm.buf[8:8+cnt])
                 except pickle.UnpicklingError as e:
-                    print(f"Fail to get backtrace for {fname}, check your gdb settings")
-                    logging.exception(e)
+                    logging.exception(f"Fail to get backtrace for {fname}, check your gdb settings")
                     continue
+                
+                n_frame = int(args.top)
+                backtrace = backtrace[:n_frame]
                 logging.info(f"Stack trace {fname}: {backtrace}")
                 if backtrace not in bts:
                     bts[backtrace] = []
                 else:
                     bts[backtrace].append(fname)
         
-        print(f"{len(bts)} unique backtrace found")
+        sys.stderr.write(f"{len(bts)} unique backtrace found\n")
+        if not Path(args.output).exists():
+            os.makedirs(args.output)
+        
+        for idx, bt in enumerate(bts.keys()):
+            dir_path = Path(args.output) / str(idx)
+            os.makedirs(dir_path)
+            with open(dir_path / "backtrace.json") as f:
+                json.dump(f, bt, indent=4)
+            
+            for crash in bts[bt]:
+                shutil.copy(Path(args.afl) / "crashes" / crash, dir_path / crash)
+        
     finally:
-        # shm.close()
+        shm.close()
         shm.unlink()
