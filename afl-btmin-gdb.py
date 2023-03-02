@@ -85,7 +85,7 @@ class FrameFilter():
             bs = pickle.dumps(backtrace)
             shm.buf[:8] = struct.pack("<Q", len(bs))
             shm.buf[8:len(bs) + 8] = bs
-            print(f"Wrote {len(bs) + 8} bytes: {binascii.hexlify(self.shm.buf[:16])}")
+            print(f"Wrote {len(bs) + 8} bytes: {binascii.hexlify(shm.buf[:16])}")
             shm.close()
             return it1
         else:
