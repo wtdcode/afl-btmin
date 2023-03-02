@@ -25,7 +25,7 @@ if __name__ == "__main__":
             program_args = sys.argv[idx+1:]
 
     if our_args is None:
-        sys.stderr.write("No program arguments are given!")
+        sys.stderr.write("No program arguments are given!\n")
         exit(-1)
 
     args = p.parse_args(program_args)
