@@ -8,15 +8,19 @@ import struct
 import os
 import pickle
 import re
+import logging
 
 SHM_NAME = "afl-btmin-shm"
 SHM_SIZE = (1 << 16)
+
+logging.basicConfig(level=logging.WARNING, format='[%(asctime)s] %(message)s')
 
 if __name__ == "__main__":
     p = ArgumentParser("afl-btmin")
     p.add_argument("--output", required=True, type=str, help="The AFL output directory")
     p.add_argument("--filter", type=str, help="Filter for crashes")
     p.add_argument("--gdb", default=False, action="store_true", help="Enable gdb output")
+    p.add_argument("--verbose", default=False, action="store_true", help="Verbose logging")
 
     program_args = None
     our_args = None
@@ -30,6 +34,10 @@ if __name__ == "__main__":
         exit(-1)
 
     args = p.parse_args(our_args[1:])
+
+    if args.verbose:
+        logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(message)s')
+
     shm = SharedMemory(name=SHM_NAME, create=True, size=SHM_SIZE)
     try:
         bts: Mapping[Tuple, List[str]]  = {}
@@ -75,14 +83,14 @@ if __name__ == "__main__":
                 if args.gdb:
                     subprocess.check_call(gdb_args)
                 else:
-                    subprocess.check_call(gdb_args, stdout=subprocess.DEVNULL)
+                    subprocess.check_call(gdb_args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 try:
                     cnt = struct.unpack("<Q", shm.buf[:8])[0]
                     backtrace = pickle.loads(shm.buf[8:8+cnt])
                 except pickle.UnpicklingError:
                     print(f"Fail to get backtrace for {fname}, check your gdb settings")
                     continue
-
+                logging.info(f"Stack trace {fname}: {backtrace}")
                 if backtrace not in bts:
                     bts[backtrace] = []
                 else:
@@ -90,5 +98,5 @@ if __name__ == "__main__":
         
         print(f"{len(bts)} unique backtrace found")
     finally:
-        shm.close()
+        # shm.close()
         shm.unlink()
