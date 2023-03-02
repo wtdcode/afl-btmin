@@ -4,7 +4,7 @@ from argparse import ArgumentParser
 from pathlib import Path
 from multiprocessing.shared_memory import SharedMemory
 from typing import Mapping, Tuple, List
-from multiprocess import resource_tracker
+from multiprocessing import resource_tracker
 import subprocess
 import sys
 import struct
