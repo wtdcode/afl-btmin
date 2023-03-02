@@ -117,7 +117,7 @@ if __name__ == "__main__":
             else:
                 os.makedirs(dir_path)
             with open(dir_path / "backtrace.json", "w+") as f:
-                json.dump(f, bt, indent=4)
+                json.dump(bt, f, indent=4)
             
             for crash in bts[bt]:
                 shutil.copy(Path(args.afl) / "crashes" / crash, dir_path / crash)
