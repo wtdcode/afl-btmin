@@ -55,7 +55,7 @@ class FrameFilter():
         self.enabled = True
         gdb.frame_filters[self.name] = self
 
-    def _gen_backtrace(frames: List[FrameDecorator]):
+    def _gen_backtrace(self, frames: List[FrameDecorator]):
         backtraces = []
 
         for frame in frames:
