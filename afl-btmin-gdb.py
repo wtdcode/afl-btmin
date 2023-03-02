@@ -5,10 +5,35 @@ import struct
 import binascii
 from itertools import tee
 from multiprocessing.shared_memory import SharedMemory
+from multiprocessing import resource_tracker
 
 SHM_NAME = "afl-btmin-shm"
 
+# Workaround found at https://stackoverflow.com/questions/64102502/shared-memory-deleted-at-exit
+# for https://bugs.python.org/issue39959
+def remove_shm_from_resource_tracker():
+    """Monkey-patch multiprocessing.resource_tracker so SharedMemory won't be tracked
+
+    More details at: https://bugs.python.org/issue38119
+    """
+
+    def fix_register(name, rtype):
+        if rtype == "shared_memory":
+            return
+        return resource_tracker._resource_tracker.register(name, rtype)
+    resource_tracker.register = fix_register
+
+    def fix_unregister(name, rtype):
+        if rtype == "shared_memory":
+            return
+        return resource_tracker._resource_tracker.unregister(name, rtype)
+    resource_tracker.unregister = fix_unregister
+
+    if "shared_memory" in resource_tracker._CLEANUP_FUNCS:
+        del resource_tracker._CLEANUP_FUNCS["shared_memory"]
+
 def load_shm():
+    remove_shm_from_resource_tracker()
     try:
         shm = SharedMemory(name=SHM_NAME, create=False)
         v = struct.unpack("<Q", shm.buf[:8])[0]

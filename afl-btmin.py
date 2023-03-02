@@ -4,7 +4,7 @@ from argparse import ArgumentParser
 from pathlib import Path
 from multiprocessing.shared_memory import SharedMemory
 from typing import Mapping, Tuple, List
-from multiprocessing.resource_tracker import unregister
+from multiprocess import resource_tracker
 import subprocess
 import sys
 import struct
@@ -14,6 +14,30 @@ import re
 import logging
 import json
 import shutil
+
+# Workaround found at https://stackoverflow.com/questions/64102502/shared-memory-deleted-at-exit
+# for https://bugs.python.org/issue39959
+def remove_shm_from_resource_tracker():
+    """Monkey-patch multiprocessing.resource_tracker so SharedMemory won't be tracked
+
+    More details at: https://bugs.python.org/issue38119
+    """
+
+    def fix_register(name, rtype):
+        if rtype == "shared_memory":
+            return
+        return resource_tracker._resource_tracker.register(name, rtype)
+    resource_tracker.register = fix_register
+
+    def fix_unregister(name, rtype):
+        if rtype == "shared_memory":
+            return
+        return resource_tracker._resource_tracker.unregister(name, rtype)
+    resource_tracker.unregister = fix_unregister
+
+    if "shared_memory" in resource_tracker._CLEANUP_FUNCS:
+        del resource_tracker._CLEANUP_FUNCS["shared_memory"]
+
 
 SHM_NAME = "afl-btmin-shm"
 SHM_SIZE = (1 << 16)
@@ -48,10 +72,8 @@ if __name__ == "__main__":
     if args.verbose:
         logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(message)s', force=True)
 
-    # Workaround found at https://stackoverflow.com/questions/64102502/shared-memory-deleted-at-exit
-    # for https://bugs.python.org/issue39959
+    remove_shm_from_resource_tracker()
     shm = SharedMemory(name=SHM_NAME, create=True, size=SHM_SIZE)
-    unregister(SHM_NAME, 'shared_memory')
     try:
         bts: Mapping[Tuple, List[str]]  = {}
 
