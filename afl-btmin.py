@@ -4,6 +4,7 @@ from argparse import ArgumentParser
 from pathlib import Path
 from multiprocessing.shared_memory import SharedMemory
 from typing import Mapping, Tuple, List
+from multiprocessing.resource_tracker import unregister
 import subprocess
 import sys
 import struct
@@ -47,7 +48,10 @@ if __name__ == "__main__":
     if args.verbose:
         logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(message)s', force=True)
 
+    # Workaround found at https://stackoverflow.com/questions/64102502/shared-memory-deleted-at-exit
+    # for https://bugs.python.org/issue39959
     shm = SharedMemory(name=SHM_NAME, create=True, size=SHM_SIZE)
+    unregister(SHM_NAME, 'shared_memory')
     try:
         bts: Mapping[Tuple, List[str]]  = {}
 
@@ -126,4 +130,4 @@ if __name__ == "__main__":
         
     finally:
         shm.close()
-        # shm.unlink() # No need to unlink?
+        shm.unlink() # No need to unlink?
