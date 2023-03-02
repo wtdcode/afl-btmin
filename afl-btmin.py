@@ -33,7 +33,7 @@ if __name__ == "__main__":
             our_args = sys.argv[0:idx]
             program_args = sys.argv[idx+1:]
 
-    if our_args is None:
+    if our_args is None and "-h" not in sys.argv and "--help" not in sys.argv:
         sys.stderr.write("No program arguments are given!\n")
         exit(-1)
 
