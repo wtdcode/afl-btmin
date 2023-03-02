@@ -97,6 +97,7 @@ if __name__ == "__main__":
                 gdb_args += [
                     "-ex", "set confirm off",
                     "-ex", "set pagination off",
+                    "-ex", f"set backtrace limit {int(args.top) + 25}",
                     "-ex", "r",
                     "-ex", "bt",
                     "-ex", "q"
