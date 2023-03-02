@@ -19,7 +19,7 @@ if __name__ == "__main__":
 
     program_args = None
     our_args = None
-    for idx, arg in sys.argv:
+    for idx, arg in enumerate(sys.argv):
         if arg == "--":
             our_args = sys.argv[0:idx]
             program_args = sys.argv[idx+1:]
