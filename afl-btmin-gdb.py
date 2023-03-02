@@ -37,6 +37,7 @@ class FrameFilter():
             self.shm.buf[8:len(bs) + 8] = bs
             return it1
         else:
+            print("Warning: no shared memory is detected")
             return it
 
 FrameFilter()
