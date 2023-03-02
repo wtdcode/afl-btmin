@@ -137,9 +137,8 @@ if __name__ == "__main__":
 
         bt_dir = Path(args.afl) / "crashes" / "backtraces"
         os.makedirs(bt_dir, exist_ok=True)
-        
+        bt_id = 0
         for bt, fnames in bts.items():
-            bt_id = 0
             with open(bt_dir / f"{str(bt_id)}.json", "w+") as f:
                 json.dump(bt, f, indent=4)
 
