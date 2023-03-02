@@ -26,6 +26,7 @@ class FrameFilter():
     def __init__(self) -> None:
         self.name = "afl-btmin"
         self.priority = 100
+        self.enabled = True
         gdb.frame_filters[self.name] = self
 
     def filter(self, it):

@@ -72,9 +72,12 @@ if __name__ == "__main__":
                 ] + actual_args
 
                 subprocess.check_call(gdb_args)
-
-                cnt = struct.unpack("<Q", shm.buf[:8])[0]
-                backtrace = pickle.loads(shm.buf[8:8+cnt])
+                try:
+                    cnt = struct.unpack("<Q", shm.buf[:8])[0]
+                    backtrace = pickle.loads(shm.buf[8:8+cnt])
+                except pickle.UnpicklingError:
+                    print(f"Fail to get backtrace for {fname}, check your gdb settings")
+                    continue
 
                 if backtrace not in bts:
                     bts[backtrace] = []
