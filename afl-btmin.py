@@ -28,7 +28,7 @@ if __name__ == "__main__":
         sys.stderr.write("No program arguments are given!\n")
         exit(-1)
 
-    args = p.parse_args(program_args)
+    args = p.parse_args(our_args)
     shm = SharedMemory(name=SHM_NAME, size=SHM_SIZE)
 
     bts: Mapping[Tuple, List[str]]  = {}
