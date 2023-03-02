@@ -36,7 +36,7 @@ if __name__ == "__main__":
     args = p.parse_args(our_args[1:])
 
     if args.verbose:
-        logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(message)s')
+        logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(message)s', force=True)
 
     shm = SharedMemory(name=SHM_NAME, create=True, size=SHM_SIZE)
     try:
@@ -87,8 +87,9 @@ if __name__ == "__main__":
                 try:
                     cnt = struct.unpack("<Q", shm.buf[:8])[0]
                     backtrace = pickle.loads(shm.buf[8:8+cnt])
-                except pickle.UnpicklingError:
+                except pickle.UnpicklingError as e:
                     print(f"Fail to get backtrace for {fname}, check your gdb settings")
+                    logging.exception(e)
                     continue
                 logging.info(f"Stack trace {fname}: {backtrace}")
                 if backtrace not in bts:
