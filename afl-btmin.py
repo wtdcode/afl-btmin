@@ -1,3 +1,5 @@
+#!/usr/bin/python3
+
 from argparse import ArgumentParser
 from pathlib import Path
 from multiprocessing.shared_memory import SharedMemory
