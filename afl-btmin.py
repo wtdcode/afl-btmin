@@ -79,7 +79,7 @@ if __name__ == "__main__":
         for fname in os.listdir(Path(args.afl) / "crashes"):
             crash_fname = Path(args.afl) / "crashes" / fname
 
-            if crash_fname.is_file() and "id=" in fname:
+            if crash_fname.is_file() and "id:" in fname:
                 
                 if args.filter is not None:
                     if re.match(args.filter, fname) is None:
@@ -144,8 +144,8 @@ if __name__ == "__main__":
                 json.dump(bt, f, indent=4)
 
             for fname in fnames:
-                fname = ",".join([tk for tk in fname.split(",") if 'bt=' not in tk])
-                shutil.move(Path(args.afl) / "crashes" / fname, Path(args.afl) / "crashes" / f"{fname},bt={bt_id}")
+                fname = ",".join([tk for tk in fname.split(",") if 'bt' not in tk])
+                shutil.move(Path(args.afl) / "crashes" / fname, Path(args.afl) / "crashes" / f"{fname},bt:{bt_id}")
             
             bt_id += 1
         
