@@ -7,6 +7,6 @@ Python >= 3.8 is required and I suggest disabling other gdb plugins, i.e. keepin
 Usage:
 
 ```bash
-echo "source /path/to/repo/afl-btmin-gdb.py"
+echo "source /path/to/repo/afl-btmin-gdb.py" >> ~/.gdbinit
 python3 afl-btmin --afl afl_output_dir --output unique_crashes -- fuzz_program @@
 ```
