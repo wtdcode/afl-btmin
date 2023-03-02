@@ -125,5 +125,5 @@ if __name__ == "__main__":
                 shutil.copy(Path(args.afl) / "crashes" / crash, dir_path / crash)
         
     finally:
-        # shm.close()
-        shm.unlink()
+        shm.close()
+        # shm.unlink() # No need to unlink?
