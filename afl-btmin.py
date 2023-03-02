@@ -15,7 +15,8 @@ SHM_SIZE = (1 << 16)
 if __name__ == "__main__":
     p = ArgumentParser("afl-btmin")
     p.add_argument("--output", required=True, type=str, help="The AFL output directory")
-    p.add_argument("--filter", type=str, help="Filter for crashes")    
+    p.add_argument("--filter", type=str, help="Filter for crashes")
+    p.add_argument("--gdb", default=False, action="store_true", help="Enable gdb output")
 
     program_args = None
     our_args = None
@@ -71,7 +72,10 @@ if __name__ == "__main__":
                     "--args"
                 ] + actual_args
 
-                subprocess.check_call(gdb_args)
+                if args.gdb:
+                    subprocess.check_call(gdb_args)
+                else:
+                    subprocess.check_call(gdb_args, stdout=subprocess.DEVNULL)
                 try:
                     cnt = struct.unpack("<Q", shm.buf[:8])[0]
                     backtrace = pickle.loads(shm.buf[8:8+cnt])
@@ -87,3 +91,4 @@ if __name__ == "__main__":
         print(f"{len(bts)} unique backtrace found")
     finally:
         shm.close()
+        shm.unlink()
