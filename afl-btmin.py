@@ -30,56 +30,57 @@ if __name__ == "__main__":
 
     args = p.parse_args(our_args[1:])
     shm = SharedMemory(name=SHM_NAME, create=True, size=SHM_SIZE)
+    try:
+        bts: Mapping[Tuple, List[str]]  = {}
 
-    bts: Mapping[Tuple, List[str]]  = {}
+        for fname in os.listdir(Path(args.output) / "crashes"):
+            crash_fname = Path(args.output) / "crashes" / fname
 
-    for fname in os.listdir(Path(args.output) / "crashes"):
-        crash_fname = Path(args.output) / "crashes" / fname
+            if crash_fname.is_file():
+                
+                if args.filter is not None:
+                    if re.match(args.filter, fname) is None:
+                        print(f"{fname} is skipped")
+                        continue
 
-        if crash_fname.is_file():
-            
-            if args.filter is not None:
-                if re.match(args.filter, fname) is None:
-                    print(f"{fname} is skipped")
-                    continue
+                # Write some value to verify it's us
+                shm.buf[:8] = struct.pack("<Q", 114514)
 
-            # Write some value to verify it's us
-            shm.buf[:8] = struct.pack("<Q", 114514)
+                # -ex "set confirm off" -ex "set pagination off" -ex "r" -ex "bt" -ex "q"
+                gdb_args = [
+                    "gdb"
+                ]
 
-            # -ex "set confirm off" -ex "set pagination off" -ex "r" -ex "bt" -ex "q"
-            gdb_args = [
-                "gdb"
-            ]
+                gdb_args += [
+                    "-ex", "set confirm off",
+                    "-ex", "set pagination off",
+                    "-ex", "r",
+                    "-ex", "bt",
+                    "-ex", "q"
+                ]
 
-            gdb_args += [
-                "-ex", "set confirm off",
-                "-ex", "set pagination off",
-                "-ex", "r",
-                "-ex", "bt",
-                "-ex", "q"
-            ]
+                actual_args = []
 
-            actual_args = []
+                for arg in program_args:
+                    if arg == "@@":
+                        actual_args.append(str(crash_fname.absolute()))
+                    else:
+                        actual_args.append(arg)
 
-            for arg in program_args:
-                if arg == "@@":
-                    actual_args.append(str(crash_fname.absolute()))
+                gdb_args += [
+                    "--args"
+                ] + actual_args
+
+                subprocess.check_call(gdb_args)
+
+                cnt = struct.unpack("<Q", shm.buf[:8])[0]
+                backtrace = pickle.loads(shm.buf[8:8+cnt])
+
+                if backtrace not in bts:
+                    bts[backtrace] = []
                 else:
-                    actual_args.append(arg)
-
-            gdb_args += [
-                "--args"
-            ] + actual_args
-
-            subprocess.check_call(gdb_args)
-
-            cnt = struct.unpack("<Q", shm.buf[:8])[0]
-            backtrace = pickle.loads(shm.buf[8:8+cnt])
-
-            if backtrace not in bts:
-                bts[backtrace] = []
-            else:
-                bts[backtrace].append(fname)
-    
-    print(f"{len(bts)} unique backtrace found")
-    shm.close()
+                    bts[backtrace].append(fname)
+        
+        print(f"{len(bts)} unique backtrace found")
+    finally:
+        shm.close()
