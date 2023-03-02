@@ -112,7 +112,10 @@ if __name__ == "__main__":
         
         for idx, bt in enumerate(bts.keys()):
             dir_path = Path(args.output) / str(idx)
-            os.makedirs(dir_path)
+            if dir_path.exists():
+                logging.warning(f"{dir_path} already exists, content will be overwritten")
+            else:
+                os.makedirs(dir_path)
             with open(dir_path / "backtrace.json", "w+") as f:
                 json.dump(f, bt, indent=4)
             
