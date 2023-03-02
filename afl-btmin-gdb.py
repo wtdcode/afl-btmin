@@ -75,13 +75,13 @@ class FrameFilter():
 
             backtraces.append((func, fname, ln))
         
-        return backtraces
+        return tuple(backtraces)
 
     def filter(self, it):
         shm = load_shm()
         if shm is not None:
             it1, it2 = tee(it)
-            backtrace = tuple(list(it2))
+            backtrace =  self._gen_backtrace(list(it2))
             bs = pickle.dumps(backtrace)
             shm.buf[:8] = struct.pack("<Q", len(bs))
             shm.buf[8:len(bs) + 8] = bs
