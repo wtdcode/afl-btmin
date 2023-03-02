@@ -130,8 +130,7 @@ if __name__ == "__main__":
                 logging.info(f"Stack trace {fname}: {backtrace}")
                 if backtrace not in bts:
                     bts[backtrace] = []
-                else:
-                    bts[backtrace].append(fname)
+                bts[backtrace].append(fname)
         
         sys.stderr.write(f"{len(bts)} unique backtrace found\n")
 
