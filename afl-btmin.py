@@ -113,7 +113,7 @@ if __name__ == "__main__":
         for idx, bt in enumerate(bts.keys()):
             dir_path = Path(args.output) / str(idx)
             os.makedirs(dir_path)
-            with open(dir_path / "backtrace.json") as f:
+            with open(dir_path / "backtrace.json", "w+") as f:
                 json.dump(f, bt, indent=4)
             
             for crash in bts[bt]:
