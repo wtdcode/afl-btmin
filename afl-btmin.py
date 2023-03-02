@@ -79,7 +79,7 @@ if __name__ == "__main__":
         for fname in os.listdir(Path(args.afl) / "crashes"):
             crash_fname = Path(args.afl) / "crashes" / fname
 
-            if crash_fname.is_file() and "id=" in crash_fname:
+            if crash_fname.is_file() and "id=" in fname:
                 
                 if args.filter is not None:
                     if re.match(args.filter, fname) is None:
