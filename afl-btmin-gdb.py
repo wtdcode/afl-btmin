@@ -3,6 +3,7 @@ import gdb
 import pickle
 import struct
 import binascii
+from typing import List
 from itertools import tee
 from multiprocessing.shared_memory import SharedMemory
 from multiprocessing import resource_tracker
@@ -54,11 +55,33 @@ class FrameFilter():
         self.enabled = True
         gdb.frame_filters[self.name] = self
 
+    def _gen_backtrace(frames: List[FrameDecorator]):
+        backtraces = []
+
+        for frame in frames:
+            func = frame.function()
+
+            if func == frame.inferior_frame().pc():
+                # In this case, gdb fails to find a function boundary, it happens mostly for
+                # libc subroutines in assembly files. It's fairly enough to use filenames and
+                # line numbers to identify the backtrace in this case, so we assign a fake pc
+                # to avoid generate different backtrace.
+                func = "0x19260817"
+            
+            fname = frame.filename()
+
+            # We have to add line numbers for functions (like overloaded) which shares the same name.
+            ln = frame.line()
+
+            backtraces.append((func, fname, ln))
+        
+        return backtraces
+
     def filter(self, it):
         shm = load_shm()
         if shm is not None:
             it1, it2 = tee(it)
-            backtrace = tuple([(frame.function(), frame.filename(), frame.line()) for frame in it2])
+            backtrace = tuple(list(it2))
             bs = pickle.dumps(backtrace)
             shm.buf[:8] = struct.pack("<Q", len(bs))
             shm.buf[8:len(bs) + 8] = bs
