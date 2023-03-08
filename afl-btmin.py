@@ -193,6 +193,8 @@ if __name__ == "__main__":
                     if new_bt not in new_bts:
                         new_bts[new_bt] = []
                     new_bts[new_bt].extend(names)
+                
+                bts = new_bts
 
         
         sys.stderr.write(f"{len(bts)} unique backtrace found\n")
