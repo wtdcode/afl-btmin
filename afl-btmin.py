@@ -94,7 +94,7 @@ if __name__ == "__main__":
                     else:
                         actual_args.append(arg)
 
-                if not "+san" in crash_fname.name:
+                if not "+san" in crash_fname.name and not "+both" in crash_fname.name:
                     # Write some value to verify it's us
                     shm.buf[:8] = struct.pack("<Q", 114514)
 
