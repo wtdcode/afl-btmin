@@ -96,7 +96,15 @@ def get_by_asan(args: List[str], verbose: bool, use_stdin: bool):
     else:
         proc = subprocess.run(args, stderr=subprocess.PIPE)
     
-    output = proc.stderr.decode("utf-8")
+    raw_stderr = proc.stderr
+    # Try to avoid decode non-utf-8 chars
+    idx = raw_stderr.find(b"ERROR")
+    if idx == -1:
+        idx = raw_stderr.find(b"WARNING")
+        if idx == -1:
+            idx = 0
+    
+    output = raw_stderr[idx:].decode("utf-8")
     lns = output.split("\n")
 
     logging.info(f"ASAN stderr: {output}")
