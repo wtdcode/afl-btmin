@@ -156,11 +156,11 @@ if __name__ == "__main__":
                         if in_error:
                             tks = re.findall(r"#(\d+) [0-9xabcdef]+ in (.+) (.+)", ln.strip())
 
-                            if len(tks) != 3:
+                            if len(tks) == 0:
                                 if len(backtrace) != 0:
                                     in_error = False
                                 continue
-
+                            tks = tks[0]
                             cur_level = int(tks[0])
                             ln_tks = tks[2].split(":")
                             if len(ln_tks) > 1:
