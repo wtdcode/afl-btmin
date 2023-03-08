@@ -51,6 +51,7 @@ if __name__ == "__main__":
     p.add_argument("--gdb", default=False, action="store_true", help="Enable gdb output")
     p.add_argument("--verbose", default=False, action="store_true", help="Verbose logging")
     p.add_argument("--top", default=3, type=int, help="Use top N frames to dedup")
+    p.add_argument("--asan", type=str, help="ASAN binary for sanitizer crashes")
 
     program_args = None
     our_args = None
@@ -85,29 +86,7 @@ if __name__ == "__main__":
                     if re.match(args.filter, fname) is None:
                         logging.warning(f"{fname} is skipped")
                         continue
-
-                # Write some value to verify it's us
-                shm.buf[:8] = struct.pack("<Q", 114514)
-
-                # -ex "set confirm off" -ex "set pagination off" -ex "r" -ex "bt" -ex "q"
-                gdb_args = [
-                    "gdb"
-                ]
-
-                if use_stin:
-                    run_args = ["-ex", f"r < {str(crash_fname.absolute())}"]
-                else:
-                    run_args = ["ex", "r"]
-
-                gdb_args += [
-                    "-ex", "set confirm off",
-                    "-ex", "set pagination off",
-                    "-ex", f"set backtrace limit {int(args.top) + 25}"] 
-                + run_args + [
-                    "-ex", "bt",
-                    "-ex", "q"
-                ]
-
+                    
                 actual_args = []
                 use_stin = "@@" not in program_args
                 for arg in program_args:
@@ -116,23 +95,87 @@ if __name__ == "__main__":
                     else:
                         actual_args.append(arg)
 
-                gdb_args += [
-                    "--args"
-                ] + actual_args
+                if not "+san" in crash_fname.name:
+                    # Write some value to verify it's us
+                    shm.buf[:8] = struct.pack("<Q", 114514)
 
-                if args.gdb:
-                    subprocess.check_call(gdb_args)
+                    # -ex "set confirm off" -ex "set pagination off" -ex "r" -ex "bt" -ex "q"
+                    gdb_args = [
+                        "gdb"
+                    ]
+
+                    if use_stin:
+                        run_args = ["-ex", f"r < {str(crash_fname.absolute())}"]
+                    else:
+                        run_args = ["ex", "r"]
+
+                    gdb_args += [
+                        "-ex", "set confirm off",
+                        "-ex", "set pagination off",
+                        "-ex", f"set backtrace limit {int(args.top) + 25}"] 
+                    + run_args + [
+                        "-ex", "bt",
+                        "-ex", "q"
+                    ]
+                    
+
+                    gdb_args += [
+                        "--args"
+                    ] + actual_args
+
+                    if args.gdb:
+                        subprocess.check_call(gdb_args)
+                    else:
+                        subprocess.check_call(gdb_args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    try:
+                        cnt = struct.unpack("<Q", shm.buf[:8])[0]
+                        backtrace = pickle.loads(shm.buf[8:8+cnt])
+                    except pickle.UnpicklingError as e:
+                        logging.exception(f"Fail to get backtrace for {fname}, check your gdb settings")
+                        continue
+                    
+                    n_frame = int(args.top)
+                    backtrace = backtrace[:n_frame]
                 else:
-                    subprocess.check_call(gdb_args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                try:
-                    cnt = struct.unpack("<Q", shm.buf[:8])[0]
-                    backtrace = pickle.loads(shm.buf[8:8+cnt])
-                except pickle.UnpicklingError as e:
-                    logging.exception(f"Fail to get backtrace for {fname}, check your gdb settings")
-                    continue
-                
-                n_frame = int(args.top)
-                backtrace = backtrace[:n_frame]
+                    actual_args[0] = args.asan
+                    backtrace = []
+                    
+                    if use_stin:
+                        with open(crash_fname, "rb+") as f:
+                            proc = subprocess.run(actual_args, stdin=f, stderr=subprocess.PIPE)
+                    else:
+                        proc = subprocess.run(actual_args, stderr=subprocess.PIPE)
+                    
+                    output = proc.stderr.decode("utf-8")
+                    lns = output.split("\n")
+
+                    in_error = False
+                    for ln in lns:
+                        if "ERROR" in ln:
+                            in_error = True
+
+                        if in_error:
+                            tks = re.findall(r"#(\d+) [0-9xabcdef]+ in (.+) (.+)", ln.strip())
+
+                            if len(tks) != 3:
+                                if len(backtrace) != 0:
+                                    in_error = False
+                                continue
+
+                            cur_level = int(tks[0])
+                            ln_tks = tks[2].split(":")
+                            if len(ln_tks) > 1:
+                                ln_num = int(ln_tks[1])
+                                src = ln_tks[0]
+                            else:
+                                ln_num = 0
+                                src = ln_tks[0]
+
+                            if cur_level >= args.top:
+                                break
+                            else:
+                                backtrace.append((tks[1], src, ln_num))
+
                 logging.info(f"Stack trace {fname}: {backtrace}")
                 if backtrace not in bts:
                     bts[backtrace] = []
