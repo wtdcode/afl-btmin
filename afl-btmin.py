@@ -176,6 +176,7 @@ if __name__ == "__main__":
                             else:
                                 backtrace.append((tks[1], src, ln_num))
 
+                backtrace = tuple(backtrace)
                 logging.info(f"Stack trace {fname}: {backtrace}")
                 if backtrace not in bts:
                     bts[backtrace] = []
