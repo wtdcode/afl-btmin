@@ -61,7 +61,7 @@ def get_by_gdb(args: List[str], shm: SharedMemory, verbose: bool, use_stdin: boo
     gdb_args += [
         "-ex", "set confirm off",
         "-ex", "set pagination off",
-        "-ex", f"set backtrace limit {int(args.top) + 25}"] + run_args + [
+        "-ex", f"set backtrace limit 125"] + run_args + [
         "-ex", "bt",
         "-ex", "q"
     ]
