@@ -48,7 +48,6 @@ if __name__ == "__main__":
     p = ArgumentParser("afl-btmin")
     p.add_argument("--afl", required=True, type=str, help="The AFL fuzzing output directory")
     p.add_argument("--filter", type=str, help="Filter for crashes")
-    p.add_argument("--gdb", default=False, action="store_true", help="Enable gdb output")
     p.add_argument("--verbose", default=False, action="store_true", help="Verbose logging")
     p.add_argument("--top", default=3, type=int, help="Use top N frames to dedup")
     p.add_argument("--asan", type=str, help="ASAN binary for sanitizer crashes")
@@ -122,7 +121,7 @@ if __name__ == "__main__":
                         "--args"
                     ] + actual_args
 
-                    if args.gdb:
+                    if args.verbose:
                         subprocess.check_call(gdb_args)
                     else:
                         subprocess.check_call(gdb_args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -148,6 +147,7 @@ if __name__ == "__main__":
                     output = proc.stderr.decode("utf-8")
                     lns = output.split("\n")
 
+                    logging.info(f"ASAN stderr: {output}")
                     in_error = False
                     for ln in lns:
                         if "ERROR" in ln:
