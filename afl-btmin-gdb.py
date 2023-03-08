@@ -7,6 +7,7 @@ from typing import List
 from itertools import tee
 from multiprocessing.shared_memory import SharedMemory
 from multiprocessing import resource_tracker
+from pathlib import Path
 
 SHM_NAME = "afl-btmin-shm"
 
@@ -73,7 +74,7 @@ class FrameFilter():
             # We have to add line numbers for functions (like overloaded) which shares the same name.
             ln = frame.line()
 
-            backtraces.append((func, fname, ln))
+            backtraces.append((func, Path(fname).name, ln))
         
         return tuple(backtraces)
 

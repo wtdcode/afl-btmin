@@ -173,13 +173,27 @@ if __name__ == "__main__":
                             if cur_level >= args.top:
                                 break
                             else:
-                                backtrace.append((tks[1], src, ln_num))
+                                backtrace.append((tks[1], Path(src).name, ln_num))
 
                 backtrace = tuple(backtrace)
                 logging.info(f"Stack trace {fname}: {backtrace}")
                 if backtrace not in bts:
                     bts[backtrace] = []
                 bts[backtrace].append(fname)
+
+                # check if all backtraces are of the same length
+                min_length = int(args.top)
+                for bt in bts.keys():
+                    if len(bt) < min_length:
+                        min_length = len(bt)
+                
+                new_bts = {}
+                for bt, names in bts.items():
+                    new_bt = bt[:min_length]
+                    if new_bt not in new_bts:
+                        new_bts[new_bt] = []
+                    new_bts[new_bt].extend(names)
+
         
         sys.stderr.write(f"{len(bts)} unique backtrace found\n")
 
