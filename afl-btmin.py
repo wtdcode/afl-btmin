@@ -94,17 +94,22 @@ if __name__ == "__main__":
                     "gdb"
                 ]
 
+                if use_stin:
+                    run_args = ["-ex", f"r < {str(crash_fname.absolute())}"]
+                else:
+                    run_args = ["ex", "r"]
+
                 gdb_args += [
                     "-ex", "set confirm off",
                     "-ex", "set pagination off",
-                    "-ex", f"set backtrace limit {int(args.top) + 25}",
-                    "-ex", "r",
+                    "-ex", f"set backtrace limit {int(args.top) + 25}"] 
+                + run_args + [
                     "-ex", "bt",
                     "-ex", "q"
                 ]
 
                 actual_args = []
-
+                use_stin = "@@" not in program_args
                 for arg in program_args:
                     if arg == "@@":
                         actual_args.append(str(crash_fname.absolute()))
