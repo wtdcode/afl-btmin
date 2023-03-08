@@ -82,6 +82,8 @@ def get_by_gdb(args: List[str], shm: SharedMemory, verbose: bool, use_stdin: boo
     except pickle.UnpicklingError as e:
         logging.info(f"Fail to get backtrace for {fname} using gdb")
         return None
+    finally:
+        shm.buf[:SHM_SIZE] = '\x00' * SHM_SIZE
     
     return backtrace
 
