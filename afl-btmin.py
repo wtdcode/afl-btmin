@@ -44,6 +44,85 @@ SHM_SIZE = (1 << 16)
 
 logging.basicConfig(level=logging.WARNING, format='[%(asctime)s] %(message)s')
 
+
+def get_by_gdb(args: List[str], shm: SharedMemory, verbose: bool, use_stdin: bool):
+    shm.buf[:8] = struct.pack("<Q", 114514)
+
+    # -ex "set confirm off" -ex "set pagination off" -ex "r" -ex "bt" -ex "q"
+    gdb_args = [
+        "gdb"
+    ]
+
+    if use_stin:
+        run_args = ["-ex", f"r < {str(crash_fname.absolute())}"]
+    else:
+        run_args = ["-ex", "r"]
+
+    gdb_args += [
+        "-ex", "set confirm off",
+        "-ex", "set pagination off",
+        "-ex", f"set backtrace limit {int(args.top) + 25}"] + run_args + [
+        "-ex", "bt",
+        "-ex", "q"
+    ]
+    
+
+    gdb_args += [
+        "--args"
+    ] + args
+
+    if verbose:
+        logging.info(f"gdb_args: {' '.join(gdb_args)}")
+        subprocess.check_call(gdb_args)
+    else:
+        subprocess.check_call(gdb_args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        cnt = struct.unpack("<Q", shm.buf[:8])[0]
+        backtrace = pickle.loads(shm.buf[8:8+cnt])
+    except pickle.UnpicklingError as e:
+        logging.info(f"Fail to get backtrace for {fname} using gdb")
+        return None
+    
+    return backtrace
+
+def get_by_asan(args: List[str], verbose: bool, use_stdin: bool):
+    backtrace = []
+                    
+    if use_stin:
+        with open(crash_fname, "rb+") as f:
+            proc = subprocess.run(args, stdin=f, stderr=subprocess.PIPE)
+    else:
+        proc = subprocess.run(args, stderr=subprocess.PIPE)
+    
+    output = proc.stderr.decode("utf-8")
+    lns = output.split("\n")
+
+    logging.info(f"ASAN stderr: {output}")
+    in_error = False
+    for ln in lns:
+        if "ERROR" in ln:
+            in_error = True
+
+        if in_error:
+            tks = re.findall(r"#(\d+) [0-9xabcdef]+ in (.+) (.+)", ln.strip())
+
+            if len(tks) == 0:
+                if len(backtrace) != 0:
+                    in_error = False
+                continue
+            tks = tks[0]
+            ln_tks = tks[2].split(":")
+            if len(ln_tks) > 1:
+                ln_num = int(ln_tks[1])
+                src = ln_tks[0]
+            else:
+                ln_num = 0
+                src = ln_tks[0]
+
+            backtrace.append((tks[1], Path(src).name, ln_num))
+
+    return tuple(backtrace)
+
 if __name__ == "__main__":
     p = ArgumentParser("afl-btmin")
     p.add_argument("--afl", required=True, type=str, help="The AFL fuzzing output directory")
@@ -95,88 +174,23 @@ if __name__ == "__main__":
                         actual_args.append(arg)
 
                 if not "+san" in crash_fname.name and not "+both" in crash_fname.name:
-                    # Write some value to verify it's us
-                    shm.buf[:8] = struct.pack("<Q", 114514)
+                    backtrace = get_by_gdb(actual_args, shm, args.verbose, use_stin)
 
-                    # -ex "set confirm off" -ex "set pagination off" -ex "r" -ex "bt" -ex "q"
-                    gdb_args = [
-                        "gdb"
-                    ]
+                    if backtrace is None:
+                        actual_args[0] = args.asan
+                        backtrace = get_by_asan(actual_args, args.verbose, use_stin)
+                        logging.info("Got backtrace from sanitizers")
 
-                    if use_stin:
-                        run_args = ["-ex", f"r < {str(crash_fname.absolute())}"]
-                    else:
-                        run_args = ["-ex", "r"]
-
-                    gdb_args += [
-                        "-ex", "set confirm off",
-                        "-ex", "set pagination off",
-                        "-ex", f"set backtrace limit {int(args.top) + 25}"] + run_args + [
-                        "-ex", "bt",
-                        "-ex", "q"
-                    ]
-                    
-
-                    gdb_args += [
-                        "--args"
-                    ] + actual_args
-
-                    if args.verbose:
-                        logging.info(f"gdb_args: {' '.join(gdb_args)}")
-                        subprocess.check_call(gdb_args)
-                    else:
-                        subprocess.check_call(gdb_args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                    try:
-                        cnt = struct.unpack("<Q", shm.buf[:8])[0]
-                        backtrace = pickle.loads(shm.buf[8:8+cnt])
-                    except pickle.UnpicklingError as e:
-                        logging.exception(f"Fail to get backtrace for {fname}, check your gdb settings")
-                        continue
-                    
-                    n_frame = int(args.top)
-                    backtrace = backtrace[:n_frame]
                 else:
                     actual_args[0] = args.asan
-                    backtrace = []
+                    backtrace = get_by_asan(actual_args, args.verbose, use_stin)
+                
+                if backtrace is None or len(backtrace) == 0:
+                    logging.warning(f"Fail to get backtrace for {crash_fname}, skipped")
+                    continue
                     
-                    if use_stin:
-                        with open(crash_fname, "rb+") as f:
-                            proc = subprocess.run(actual_args, stdin=f, stderr=subprocess.PIPE)
-                    else:
-                        proc = subprocess.run(actual_args, stderr=subprocess.PIPE)
-                    
-                    output = proc.stderr.decode("utf-8")
-                    lns = output.split("\n")
-
-                    logging.info(f"ASAN stderr: {output}")
-                    in_error = False
-                    for ln in lns:
-                        if "ERROR" in ln:
-                            in_error = True
-
-                        if in_error:
-                            tks = re.findall(r"#(\d+) [0-9xabcdef]+ in (.+) (.+)", ln.strip())
-
-                            if len(tks) == 0:
-                                if len(backtrace) != 0:
-                                    in_error = False
-                                continue
-                            tks = tks[0]
-                            cur_level = int(tks[0])
-                            ln_tks = tks[2].split(":")
-                            if len(ln_tks) > 1:
-                                ln_num = int(ln_tks[1])
-                                src = ln_tks[0]
-                            else:
-                                ln_num = 0
-                                src = ln_tks[0]
-
-                            if cur_level >= args.top:
-                                break
-                            else:
-                                backtrace.append((tks[1], Path(src).name, ln_num))
-
-                backtrace = tuple(backtrace)
+                n_frame = int(args.top)
+                backtrace = tuple(backtrace[:n_frame])
                 logging.info(f"Stack trace {fname}: {backtrace}")
                 if backtrace not in bts:
                     bts[backtrace] = []
