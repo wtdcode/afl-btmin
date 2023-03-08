@@ -83,7 +83,7 @@ def get_by_gdb(args: List[str], shm: SharedMemory, verbose: bool, use_stdin: boo
         logging.info(f"Fail to get backtrace for {fname} using gdb")
         return None
     finally:
-        shm.buf[:SHM_SIZE] = '\x00' * SHM_SIZE
+        shm.buf[:SHM_SIZE] = b'\x00' * SHM_SIZE
     
     return backtrace
 
