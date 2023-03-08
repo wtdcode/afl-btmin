@@ -106,7 +106,7 @@ if __name__ == "__main__":
                     if use_stin:
                         run_args = ["-ex", f"r < {str(crash_fname.absolute())}"]
                     else:
-                        run_args = ["ex", "r"]
+                        run_args = ["-ex", "r"]
 
                     gdb_args += [
                         "-ex", "set confirm off",
