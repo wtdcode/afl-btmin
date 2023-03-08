@@ -74,7 +74,11 @@ class FrameFilter():
             # We have to add line numbers for functions (like overloaded) which shares the same name.
             ln = frame.line()
 
-            backtraces.append((func, Path(fname).name, ln))
+            if fname is not None:
+                fname = "nosource"
+            else:
+                fname = Path(fname).name
+            backtraces.append((func, fname, ln))
         
         return tuple(backtraces)
 
