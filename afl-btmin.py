@@ -208,6 +208,7 @@ if __name__ == "__main__":
 
             for fname in fnames:
                 suffix = Path(fname).suffix
+                stem = Path(fname).stem
                 new_fname = ",".join([tk for tk in fname.split(",") if 'bt' not in tk])
                 shutil.move(Path(args.afl) / "crashes" / fname, Path(args.afl) / "crashes" / f"{new_fname},bt:{bt_id}{suffix}")
             
