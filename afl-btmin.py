@@ -102,7 +102,7 @@ def get_by_asan(args: List[str], verbose: bool, use_stdin: bool):
     logging.info(f"ASAN stderr: {output}")
     in_error = False
     for ln in lns:
-        if "ERROR" in ln:
+        if "ERROR" in ln or "WARNING" in ln:
             in_error = True
 
         if in_error:
