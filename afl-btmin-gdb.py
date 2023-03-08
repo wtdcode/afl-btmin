@@ -74,7 +74,7 @@ class FrameFilter():
             # We have to add line numbers for functions (like overloaded) which shares the same name.
             ln = frame.line()
 
-            if fname is not None:
+            if fname is None:
                 fname = "nosource"
             else:
                 fname = Path(fname).name
