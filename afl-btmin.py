@@ -122,6 +122,7 @@ if __name__ == "__main__":
                     ] + actual_args
 
                     if args.verbose:
+                        logging.info(f"gdb_args: {' '.join(gdb_args)}")
                         subprocess.check_call(gdb_args)
                     else:
                         subprocess.check_call(gdb_args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -209,7 +210,7 @@ if __name__ == "__main__":
             for fname in fnames:
                 suffix = Path(fname).suffix
                 stem = Path(fname).stem
-                new_fname = ",".join([tk for tk in fname.split(",") if 'bt' not in tk])
+                new_fname = ",".join([tk for tk in stem.split(",") if 'bt' not in tk])
                 shutil.move(Path(args.afl) / "crashes" / fname, Path(args.afl) / "crashes" / f"{new_fname},bt:{bt_id}{suffix}")
             
             bt_id += 1
