@@ -45,93 +45,101 @@ SHM_SIZE = (1 << 16)
 logging.basicConfig(level=logging.WARNING, format='[%(asctime)s] %(message)s')
 
 
-def get_by_gdb(args: List[str], shm: SharedMemory, verbose: bool, use_stdin: bool):
-    shm.buf[:8] = struct.pack("<Q", 114514)
+def get_by_gdb(args: List[str], shm: SharedMemory, verbose: bool, use_stdin: bool, repeat: int):
+    for _ in range(repeat):
+        shm.buf[:8] = struct.pack("<Q", 114514)
 
-    # -ex "set confirm off" -ex "set pagination off" -ex "r" -ex "bt" -ex "q"
-    gdb_args = [
-        "gdb"
-    ]
+        # -ex "set confirm off" -ex "set pagination off" -ex "r" -ex "bt" -ex "q"
+        gdb_args = [
+            "gdb"
+        ]
 
-    if use_stin:
-        run_args = ["-ex", f"r < {str(crash_fname.absolute())}"]
-    else:
-        run_args = ["-ex", "r"]
+        if use_stin:
+            run_args = ["-ex", f"r < {str(crash_fname.absolute())}"]
+        else:
+            run_args = ["-ex", "r"]
 
-    gdb_args += [
-        "-ex", "set confirm off",
-        "-ex", "set pagination off",
-        "-ex", f"set backtrace limit 125"] + run_args + [
-        "-ex", "bt",
-        "-ex", "q"
-    ]
+        gdb_args += [
+            "-ex", "set confirm off",
+            "-ex", "set pagination off",
+            "-ex", f"set backtrace limit 125"] + run_args + [
+            "-ex", "bt",
+            "-ex", "q"
+        ]
+        
+
+        gdb_args += [
+            "--args"
+        ] + args
+
+        if verbose:
+            logging.info(f"gdb_args: {' '.join(gdb_args)}")
+            subprocess.check_call(gdb_args)
+        else:
+            subprocess.check_call(gdb_args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:
+            cnt = struct.unpack("<Q", shm.buf[:8])[0]
+            backtrace = pickle.loads(shm.buf[8:8+cnt])
+        except pickle.UnpicklingError as e:
+            logging.info(f"Fail to get backtrace for {fname} using gdb")
+            return None
+        finally:
+            shm.buf[:SHM_SIZE] = b'\x00' * SHM_SIZE
+        
+        if len(backtrace) != 0:
+            return backtrace
     
+    return None
 
-    gdb_args += [
-        "--args"
-    ] + args
+def get_by_asan(args: List[str], verbose: bool, use_stdin: bool, repeat: int):
+    for _ in range(repeat):
+        backtrace = []
 
-    if verbose:
-        logging.info(f"gdb_args: {' '.join(gdb_args)}")
-        subprocess.check_call(gdb_args)
-    else:
-        subprocess.check_call(gdb_args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    try:
-        cnt = struct.unpack("<Q", shm.buf[:8])[0]
-        backtrace = pickle.loads(shm.buf[8:8+cnt])
-    except pickle.UnpicklingError as e:
-        logging.info(f"Fail to get backtrace for {fname} using gdb")
-        return None
-    finally:
-        shm.buf[:SHM_SIZE] = b'\x00' * SHM_SIZE
-    
-    return backtrace
-
-def get_by_asan(args: List[str], verbose: bool, use_stdin: bool):
-    backtrace = []
-                    
-    if use_stin:
-        with open(crash_fname, "rb+") as f:
-            proc = subprocess.run(args, stdin=f, stderr=subprocess.PIPE)
-    else:
-        proc = subprocess.run(args, stderr=subprocess.PIPE)
-    
-    raw_stderr = proc.stderr
-    # Try to avoid decode non-utf-8 chars
-    idx = raw_stderr.find(b"ERROR")
-    if idx == -1:
-        idx = raw_stderr.find(b"WARNING")
+        if use_stin:
+            with open(crash_fname, "rb+") as f:
+                proc = subprocess.run(args, stdin=f, stderr=subprocess.PIPE)
+        else:
+            proc = subprocess.run(args, stderr=subprocess.PIPE)
+        
+        raw_stderr = proc.stderr
+        # Try to avoid decode non-utf-8 chars
+        idx = raw_stderr.find(b"ERROR")
         if idx == -1:
-            idx = 0
-    
-    output = raw_stderr[idx:].decode("utf-8")
-    lns = output.split("\n")
+            idx = raw_stderr.find(b"WARNING")
+            if idx == -1:
+                idx = 0
+        
+        output = raw_stderr[idx:].decode("utf-8")
+        lns = output.split("\n")
 
-    logging.info(f"ASAN stderr: {output}")
-    in_error = False
-    for ln in lns:
-        if "ERROR" in ln or "WARNING" in ln:
-            in_error = True
+        logging.info(f"ASAN stderr: {output}")
+        in_error = False
+        for ln in lns:
+            if "ERROR" in ln or "WARNING" in ln:
+                in_error = True
 
-        if in_error:
-            tks = re.findall(r"#(\d+) [0-9xabcdef]+ in (.+) (.+)", ln.strip())
+            if in_error:
+                tks = re.findall(r"#(\d+) [0-9xabcdef]+ in (.+) (.+)", ln.strip())
 
-            if len(tks) == 0:
-                if len(backtrace) != 0:
-                    in_error = False
-                continue
-            tks = tks[0]
-            ln_tks = tks[2].split(":")
-            if len(ln_tks) > 1:
-                ln_num = int(ln_tks[1])
-                src = ln_tks[0]
-            else:
-                ln_num = 0
-                src = ln_tks[0]
+                if len(tks) == 0:
+                    if len(backtrace) != 0:
+                        in_error = False
+                    continue
+                tks = tks[0]
+                ln_tks = tks[2].split(":")
+                if len(ln_tks) > 1:
+                    ln_num = int(ln_tks[1])
+                    src = ln_tks[0]
+                else:
+                    ln_num = 0
+                    src = ln_tks[0]
 
-            backtrace.append((tks[1], Path(src).name, ln_num))
+                backtrace.append((tks[1], Path(src).name, ln_num))
 
-    return tuple(backtrace)
+        if len(backtrace) != 0:
+            return backtrace
+
+    return None
 
 if __name__ == "__main__":
     p = ArgumentParser("afl-btmin")
@@ -140,6 +148,7 @@ if __name__ == "__main__":
     p.add_argument("--verbose", default=False, action="store_true", help="Verbose logging")
     p.add_argument("--top", default=3, type=int, help="Use top N frames to dedup")
     p.add_argument("--asan", type=str, help="ASAN binary for sanitizer crashes")
+    p.add_argument("--repeat", type=int, default=5, help="Repeat execution in case the crash is not stable")
 
     program_args = None
     our_args = None
@@ -156,7 +165,7 @@ if __name__ == "__main__":
         our_args = sys.argv
 
     args = p.parse_args(our_args[1:])
-
+    repeat = int(args.repeat)
     if args.verbose:
         logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(message)s', force=True)
 
@@ -184,16 +193,17 @@ if __name__ == "__main__":
                         actual_args.append(arg)
 
                 if not "+san" in crash_fname.name and not "+both" in crash_fname.name:
-                    backtrace = get_by_gdb(actual_args, shm, args.verbose, use_stin)
+                    backtrace = get_by_gdb(actual_args, shm, args.verbose, use_stin, repeat)
 
                     if backtrace is None:
                         actual_args[0] = args.asan
-                        backtrace = get_by_asan(actual_args, args.verbose, use_stin)
-                        logging.info("Got backtrace from sanitizers")
+                        backtrace = get_by_asan(actual_args, args.verbose, use_stin, repeat)
+                        if backtrace is not None:
+                            logging.info("Got backtrace from sanitizers")
 
                 else:
                     actual_args[0] = args.asan
-                    backtrace = get_by_asan(actual_args, args.verbose, use_stin)
+                    backtrace = get_by_asan(actual_args, args.verbose, use_stin, repeat)
                 
                 if backtrace is None or len(backtrace) == 0:
                     logging.warning(f"Fail to get backtrace for {crash_fname}, skipped")
