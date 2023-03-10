@@ -192,18 +192,15 @@ if __name__ == "__main__":
                     else:
                         actual_args.append(arg)
 
-                if not "+san" in crash_fname.name and not "+both" in crash_fname.name:
-                    backtrace = get_by_gdb(actual_args, shm, args.verbose, use_stin, repeat)
 
-                    if backtrace is None:
-                        actual_args[0] = args.asan
-                        backtrace = get_by_asan(actual_args, args.verbose, use_stin, repeat)
-                        if backtrace is not None:
-                            logging.info("Got backtrace from sanitizers")
+                backtrace = get_by_gdb(actual_args, shm, args.verbose, use_stin, repeat)
 
-                else:
+                if backtrace is None:
                     actual_args[0] = args.asan
                     backtrace = get_by_asan(actual_args, args.verbose, use_stin, repeat)
+                    if backtrace is not None:
+                        logging.info("Got backtrace from sanitizers")
+
                 
                 if backtrace is None or len(backtrace) == 0:
                     logging.warning(f"Fail to get backtrace for {crash_fname}, skipped")
