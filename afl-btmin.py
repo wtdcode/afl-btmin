@@ -148,6 +148,7 @@ if __name__ == "__main__":
     p.add_argument("--verbose", default=False, action="store_true", help="Verbose logging")
     p.add_argument("--top", default=3, type=int, help="Use top N frames to dedup")
     p.add_argument("--asan", type=str, help="ASAN binary for sanitizer crashes")
+    p.add_argument("--msan", type=str, help="MSAN binary for sanitizer crashes")
     p.add_argument("--repeat", type=int, default=5, help="Repeat execution in case the crash is not stable")
 
     program_args = None
@@ -199,8 +200,16 @@ if __name__ == "__main__":
                     actual_args[0] = args.asan
                     backtrace = get_by_asan(actual_args, args.verbose, use_stin, repeat)
                     if backtrace is not None:
-                        logging.info("Got backtrace from sanitizers")
+                        logging.info("Got backtrace from ASAN")
                         san_only_crash = True
+                    
+                if backtrace is None and args.msan is not None:
+                    actual_args[0] = args.msan
+                    backtrace = get_by_asan(actual_args, args.verbose, use_stin, repeat)
+                    if backtrace is not None:
+                        logging.info("Got backtrace from MSAN")
+                        san_only_crash = True
+                    
 
                 
                 if backtrace is None or len(backtrace) == 0:
