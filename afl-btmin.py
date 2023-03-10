@@ -212,22 +212,22 @@ if __name__ == "__main__":
                 logging.info(f"Stack trace {fname}: {backtrace}")
                 if backtrace not in bts:
                     bts[backtrace] = []
-                bts[backtrace].append(fname)
+                bts[backtrace].append((fname, san_only_crash))
 
-                # check if all backtraces are of the same length
-                min_length = int(args.top)
-                for bt in bts.keys():
-                    if len(bt) < min_length:
-                        min_length = len(bt)
-                
-                new_bts = {}
-                for bt, names in bts.items():
-                    new_bt = bt[:min_length]
-                    if new_bt not in new_bts:
-                        new_bts[new_bt] = []
-                    new_bts[new_bt].extend(names)
-                
-                bts = new_bts
+        # check if all backtraces are of the same length
+        min_length = int(args.top)
+        for bt in bts.keys():
+            if len(bt) < min_length:
+                min_length = len(bt)
+        
+        new_bts = {}
+        for bt, names in bts.items():
+            new_bt = bt[:min_length]
+            if new_bt not in new_bts:
+                new_bts[new_bt] = []
+            new_bts[new_bt].extend(names)
+        
+        bts = new_bts
 
         
         sys.stderr.write(f"{len(bts)} unique backtrace found\n")
@@ -239,7 +239,7 @@ if __name__ == "__main__":
             with open(bt_dir / f"{str(bt_id)}.json", "w+") as f:
                 json.dump(bt, f, indent=4)
 
-            for fname in fnames:
+            for fname, san_only in fnames:
                 suffix = Path(fname).suffix
                 stem = Path(fname).stem
                 new_fname = ",".join([tk for tk in stem.split(",") if 'bt' not in tk and 'sanonly' not in tk])
