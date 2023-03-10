@@ -243,7 +243,7 @@ if __name__ == "__main__":
                 suffix = Path(fname).suffix
                 stem = Path(fname).stem
                 new_fname = ",".join([tk for tk in stem.split(",") if 'bt' not in tk and 'sanonly' not in tk])
-                if san_only_crash:
+                if san_only:
                     n = f"{new_fname},+sanonly,bt:{bt_id}{suffix}"
                 else:
                     n = f"{new_fname},bt:{bt_id}{suffix}"
