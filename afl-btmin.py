@@ -192,14 +192,15 @@ if __name__ == "__main__":
                     else:
                         actual_args.append(arg)
 
-
+                san_only_crash = False
                 backtrace = get_by_gdb(actual_args, shm, args.verbose, use_stin, repeat)
 
-                if backtrace is None:
+                if backtrace is None and args.asan is not None:
                     actual_args[0] = args.asan
                     backtrace = get_by_asan(actual_args, args.verbose, use_stin, repeat)
                     if backtrace is not None:
                         logging.info("Got backtrace from sanitizers")
+                        san_only_crash = True
 
                 
                 if backtrace is None or len(backtrace) == 0:
@@ -242,7 +243,11 @@ if __name__ == "__main__":
                 suffix = Path(fname).suffix
                 stem = Path(fname).stem
                 new_fname = ",".join([tk for tk in stem.split(",") if 'bt' not in tk])
-                shutil.move(Path(args.afl) / "crashes" / fname, Path(args.afl) / "crashes" / f"{new_fname},bt:{bt_id}{suffix}")
+                if san_only_crash:
+                    n = f"{new_fname},+sanonly,bt:{bt_id}{suffix}"
+                else:
+                    n = f"{new_fname},bt:{bt_id}{suffix}"
+                shutil.move(Path(args.afl) / "crashes" / fname, Path(args.afl) / "crashes" / n)
             
             bt_id += 1
         
