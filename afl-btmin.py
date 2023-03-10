@@ -119,7 +119,7 @@ def get_by_asan(args: List[str], verbose: bool, use_stdin: bool, repeat: int):
                 in_error = True
 
             if in_error:
-                tks = re.findall(r"#(\d+) [0-9xabcdef]+ in (.+) (.+)", ln.strip())
+                tks = re.findall(r"#(\d+) [0-9xabcdef]+ in (.+) (.+)", " ".join(ln.strip().split(" ")[:5]))
 
                 if len(tks) == 0:
                     if len(backtrace) != 0:
