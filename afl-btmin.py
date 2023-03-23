@@ -72,11 +72,15 @@ def get_by_gdb(args: List[str], shm: SharedMemory, verbose: bool, use_stdin: boo
             "--args"
         ] + args
 
-        if verbose:
-            logging.info(f"gdb_args: {' '.join(gdb_args)}")
-            subprocess.check_call(gdb_args, timeout=timeout)
-        else:
-            subprocess.check_call(gdb_args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=timeout)
+        try:
+            if verbose:
+                logging.info(f"gdb_args: {' '.join(gdb_args)}")
+                subprocess.check_call(gdb_args, timeout=timeout)
+            else:
+                subprocess.check_call(gdb_args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            logging.warning("Timeout waiting for gdb, retry...")
+            continue
         try:
             cnt = struct.unpack("<Q", shm.buf[:8])[0]
             backtrace = pickle.loads(shm.buf[8:8+cnt])
@@ -95,11 +99,15 @@ def get_by_asan(args: List[str], verbose: bool, use_stdin: bool, repeat: int, ti
     for _ in range(repeat):
         backtrace = []
 
-        if use_stin:
-            with open(crash_fname, "rb+") as f:
-                proc = subprocess.run(args, stdin=f, stderr=subprocess.PIPE, timeout=timeout)
-        else:
-            proc = subprocess.run(args, stderr=subprocess.PIPE, timeout=timeout)
+        try:
+            if use_stin:
+                with open(crash_fname, "rb+") as f:
+                    proc = subprocess.run(args, stdin=f, stderr=subprocess.PIPE, timeout=timeout)
+            else:
+                proc = subprocess.run(args, stderr=subprocess.PIPE, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            logging.warning("Timeout waiting for sanitizers, retry...")
+            continue
         
         raw_stderr = proc.stderr
         # Try to avoid decode non-utf-8 chars
