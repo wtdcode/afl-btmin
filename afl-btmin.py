@@ -153,7 +153,7 @@ def get_by_asan(args: List[str], verbose: bool, use_stdin: bool, repeat: int, ti
 
 if __name__ == "__main__":
     p = ArgumentParser("afl-btmin")
-    p.add_argument("--afl", required=True, type=str, help="The AFL fuzzing output directory")
+    p.add_argument("--input", required=True, type=str, help="The AFL fuzzing output directory")
     p.add_argument("--filter", type=str, help="Filter for crashes")
     p.add_argument("--verbose", default=False, action="store_true", help="Verbose logging")
     p.add_argument("--top", default=3, type=int, help="Use top N frames to dedup")
@@ -187,8 +187,8 @@ if __name__ == "__main__":
     try:
         bts: Mapping[Tuple, List[str]]  = {}
 
-        for fname in os.listdir(Path(args.afl) / "crashes"):
-            crash_fname = Path(args.afl) / "crashes" / fname
+        for fname in os.listdir(Path(args.input)):
+            crash_fname = Path(args.input) / fname
 
             if crash_fname.is_file() and "id:" in fname:
                 
@@ -259,7 +259,7 @@ if __name__ == "__main__":
         
         sys.stderr.write(f"{len(bts)} unique backtrace found\n")
 
-        bt_dir = Path(args.afl) / "crashes" / "backtraces"
+        bt_dir = Path(args.input) / "backtraces"
         os.makedirs(bt_dir, exist_ok=True)
         bt_id = 0
         for bt, fnames in bts.items():
@@ -274,7 +274,7 @@ if __name__ == "__main__":
                     n = f"{new_fname},+sanonly,bt:{bt_id}{suffix}"
                 else:
                     n = f"{new_fname},bt:{bt_id}{suffix}"
-                shutil.move(Path(args.afl) / "crashes" / fname, Path(args.afl) / "crashes" / n)
+                shutil.move(Path(args.input) / fname, Path(args.input) / n)
             
             bt_id += 1
         
