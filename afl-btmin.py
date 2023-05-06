@@ -151,6 +151,7 @@ if __name__ == "__main__":
     p.add_argument("--top", default=3, type=int, help="Use top N frames to dedup")
     p.add_argument("--asan", type=str, help="ASAN binary for sanitizer crashes")
     p.add_argument("--msan", type=str, help="MSAN binary for sanitizer crashes")
+    p.add_argument("--ubsan", type=str, help="UBSAN binary (trapp instrumented)")
     p.add_argument("--repeat", type=int, default=5, help="Repeat execution in case the crash is not stable")
 
     program_args = None
@@ -198,6 +199,13 @@ if __name__ == "__main__":
                 san_only_crash = False
                 backtrace = get_by_gdb(actual_args, shm, args.verbose, use_stin, repeat)
 
+                if backtrace is None and args.ubsan is not None:
+                    actual_args[0] = args.ubsan
+                    backtrace = get_by_gdb(actual_args, shm, arg.verbose, use_stin, repeat)
+                    if backtrace is not None:
+                        logging.info("Got backtrace from UBSAN (gdb)")
+                        san_only_crash = True
+
                 if backtrace is None and args.asan is not None:
                     actual_args[0] = args.asan
                     backtrace = get_by_asan(actual_args, args.verbose, use_stin, repeat)
@@ -210,8 +218,7 @@ if __name__ == "__main__":
                     backtrace = get_by_asan(actual_args, args.verbose, use_stin, repeat)
                     if backtrace is not None:
                         logging.info("Got backtrace from MSAN")
-                        san_only_crash = True
-                    
+                        san_only_crash = True           
 
                 
                 if backtrace is None or len(backtrace) == 0:
