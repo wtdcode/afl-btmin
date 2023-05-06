@@ -45,7 +45,7 @@ SHM_SIZE = (1 << 16)
 logging.basicConfig(level=logging.WARNING, format='[%(asctime)s] %(message)s')
 
 
-def get_by_gdb(args: List[str], shm: SharedMemory, verbose: bool, use_stdin: bool, repeat: int):
+def get_by_gdb(args: List[str], shm: SharedMemory, verbose: bool, use_stdin: bool, repeat: int, timeout: int):
     for _ in range(repeat):
         shm.buf[:8] = struct.pack("<Q", 114514)
 
@@ -72,11 +72,15 @@ def get_by_gdb(args: List[str], shm: SharedMemory, verbose: bool, use_stdin: boo
             "--args"
         ] + args
 
-        if verbose:
-            logging.info(f"gdb_args: {' '.join(gdb_args)}")
-            subprocess.check_call(gdb_args)
-        else:
-            subprocess.check_call(gdb_args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:
+            if verbose:
+                logging.info(f"gdb_args: {' '.join(gdb_args)}")
+                subprocess.check_call(gdb_args, timeout=timeout)
+            else:
+                subprocess.check_call(gdb_args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            logging.warning("Timeout waiting for gdb, retry...")
+            continue
         try:
             cnt = struct.unpack("<Q", shm.buf[:8])[0]
             backtrace = pickle.loads(shm.buf[8:8+cnt])
@@ -91,15 +95,19 @@ def get_by_gdb(args: List[str], shm: SharedMemory, verbose: bool, use_stdin: boo
     
     return None
 
-def get_by_asan(args: List[str], verbose: bool, use_stdin: bool, repeat: int):
+def get_by_asan(args: List[str], verbose: bool, use_stdin: bool, repeat: int, timeout: int):
     for _ in range(repeat):
         backtrace = []
 
-        if use_stin:
-            with open(crash_fname, "rb+") as f:
-                proc = subprocess.run(args, stdin=f, stderr=subprocess.PIPE)
-        else:
-            proc = subprocess.run(args, stderr=subprocess.PIPE)
+        try:
+            if use_stin:
+                with open(crash_fname, "rb+") as f:
+                    proc = subprocess.run(args, stdin=f, stderr=subprocess.PIPE, timeout=timeout)
+            else:
+                proc = subprocess.run(args, stderr=subprocess.PIPE, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            logging.warning("Timeout waiting for sanitizers, retry...")
+            continue
         
         raw_stderr = proc.stderr
         # Try to avoid decode non-utf-8 chars
@@ -152,6 +160,7 @@ if __name__ == "__main__":
     p.add_argument("--asan", type=str, help="ASAN binary for sanitizer crashes")
     p.add_argument("--msan", type=str, help="MSAN binary for sanitizer crashes")
     p.add_argument("--ubsan", type=str, help="UBSAN binary (trapp instrumented)")
+    p.add_argument("--timeout", type=int, default=5, help="Timeout for a single run")
     p.add_argument("--repeat", type=int, default=5, help="Repeat execution in case the crash is not stable")
 
     program_args = None
@@ -197,7 +206,7 @@ if __name__ == "__main__":
                         actual_args.append(arg)
 
                 san_only_crash = False
-                backtrace = get_by_gdb(actual_args, shm, args.verbose, use_stin, repeat)
+                backtrace = get_by_gdb(actual_args, shm, args.verbose, use_stin, repeat, args.timeout)
 
                 if backtrace is None and args.ubsan is not None:
                     actual_args[0] = args.ubsan
@@ -208,14 +217,14 @@ if __name__ == "__main__":
 
                 if backtrace is None and args.asan is not None:
                     actual_args[0] = args.asan
-                    backtrace = get_by_asan(actual_args, args.verbose, use_stin, repeat)
+                    backtrace = get_by_asan(actual_args, args.verbose, use_stin, repeat, args.timeout)
                     if backtrace is not None:
                         logging.info("Got backtrace from ASAN")
                         san_only_crash = True
                     
                 if backtrace is None and args.msan is not None:
                     actual_args[0] = args.msan
-                    backtrace = get_by_asan(actual_args, args.verbose, use_stin, repeat)
+                    backtrace = get_by_asan(actual_args, args.verbose, use_stin, repeat, args.timeout)
                     if backtrace is not None:
                         logging.info("Got backtrace from MSAN")
                         san_only_crash = True           
