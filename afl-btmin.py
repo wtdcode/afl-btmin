@@ -210,7 +210,7 @@ if __name__ == "__main__":
 
                 if backtrace is None and args.ubsan is not None:
                     actual_args[0] = args.ubsan
-                    backtrace = get_by_gdb(actual_args, shm, arg.verbose, use_stin, repeat)
+                    backtrace = get_by_gdb(actual_args, shm, args.verbose, use_stin, repeat)
                     if backtrace is not None:
                         logging.info("Got backtrace from UBSAN (gdb)")
                         san_only_crash = True
