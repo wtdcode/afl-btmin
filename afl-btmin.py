@@ -192,8 +192,8 @@ if __name__ == "__main__":
             crash_fname = Path(args.input) / fname
             cnt += 1
             
-            if cnt % 100:
-                sys.stderr.write(f"mimizing {cnt}th output...\n")
+            if cnt % 100 == 0:
+                sys.stderr.write(f"mimizing {cnt}th output from {args.input}...\n")
 
             if crash_fname.is_file() and "id:" in fname:
                 
