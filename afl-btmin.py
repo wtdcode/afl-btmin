@@ -186,9 +186,14 @@ if __name__ == "__main__":
     shm = SharedMemory(name=SHM_NAME, create=True, size=SHM_SIZE)
     try:
         bts: Mapping[Tuple, List[str]]  = {}
+        cnt = 0
 
         for fname in os.listdir(Path(args.input)):
             crash_fname = Path(args.input) / fname
+            cnt += 1
+            
+            if cnt % 100:
+                sys.stderr.write(f"mimizing {cnt}th output...\n")
 
             if crash_fname.is_file() and "id:" in fname:
                 
