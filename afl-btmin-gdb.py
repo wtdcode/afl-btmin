@@ -8,8 +8,9 @@ from itertools import tee
 from multiprocessing.shared_memory import SharedMemory
 from multiprocessing import resource_tracker
 from pathlib import Path
+import os
 
-SHM_NAME = "afl-btmin-shm"
+# SHM_NAME = "afl-btmin-shm"
 
 # Workaround found at https://stackoverflow.com/questions/64102502/shared-memory-deleted-at-exit
 # for https://bugs.python.org/issue39959
@@ -37,7 +38,10 @@ def remove_shm_from_resource_tracker():
 def load_shm():
     remove_shm_from_resource_tracker()
     try:
-        shm = SharedMemory(name=SHM_NAME, create=False)
+        shm_name = os.getenv("AFL_BTMIN_SHM")
+        if shm_name is None:
+            return None
+        shm = SharedMemory(name=shm_name, create=False)
         v = struct.unpack("<Q", shm.buf[:8])[0]
         if v != 114514:
             print("Fail to verfiy the shared memory")

@@ -14,6 +14,7 @@ import re
 import logging
 import json
 import shutil
+import os
 
 # Workaround found at https://stackoverflow.com/questions/64102502/shared-memory-deleted-at-exit
 # for https://bugs.python.org/issue39959
@@ -39,13 +40,13 @@ def remove_shm_from_resource_tracker():
         del resource_tracker._CLEANUP_FUNCS["shared_memory"]
 
 
-SHM_NAME = "afl-btmin-shm"
+# SHM_NAME = "afl-btmin-shm"
 SHM_SIZE = (1 << 16)
 
 logging.basicConfig(level=logging.WARNING, format='[%(asctime)s] %(message)s')
 
 
-def get_by_gdb(args: List[str], shm: SharedMemory, verbose: bool, use_stdin: bool, repeat: int, timeout: int):
+def get_by_gdb(args: List[str], shm: SharedMemory, verbose: bool, use_stdin: bool, repeat: int, timeout: int, shm_name: str):
     for _ in range(repeat):
         shm.buf[:8] = struct.pack("<Q", 114514)
 
@@ -71,13 +72,14 @@ def get_by_gdb(args: List[str], shm: SharedMemory, verbose: bool, use_stdin: boo
         gdb_args += [
             "--args"
         ] + args
-
+        env = os.environ.copy()
+        env["AFL_BTMIN_SHM"] = shm_name
         try:
             if verbose:
                 logging.info(f"gdb_args: {' '.join(gdb_args)}")
-                subprocess.check_call(gdb_args, timeout=timeout)
+                subprocess.check_call(gdb_args, timeout=timeout, env=env)
             else:
-                subprocess.check_call(gdb_args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=timeout)
+                subprocess.check_call(gdb_args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=timeout, env=env)
         except subprocess.TimeoutExpired:
             logging.warning("Timeout waiting for gdb, retry...")
             continue
@@ -183,7 +185,8 @@ if __name__ == "__main__":
         logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(message)s', force=True)
 
     remove_shm_from_resource_tracker()
-    shm = SharedMemory(name=SHM_NAME, create=True, size=SHM_SIZE)
+    shm_name = f"afl-btmin-{os.getpid()}"
+    shm = SharedMemory(name=shm_name, create=True, size=SHM_SIZE)
     try:
         bts: Mapping[Tuple, List[str]]  = {}
         cnt = 0
@@ -211,7 +214,7 @@ if __name__ == "__main__":
                         actual_args.append(arg)
 
                 san_only_crash = False
-                backtrace = get_by_gdb(actual_args, shm, args.verbose, use_stin, repeat, args.timeout)
+                backtrace = get_by_gdb(actual_args, shm, args.verbose, use_stin, repeat, args.timeout, shm_name)
 
                 if backtrace is None and args.ubsan is not None:
                     actual_args[0] = args.ubsan
