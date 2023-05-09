@@ -83,6 +83,9 @@ def get_by_gdb(args: List[str], shm: SharedMemory, verbose: bool, use_stdin: boo
         except subprocess.TimeoutExpired:
             logging.warning("Timeout waiting for gdb, retry...")
             continue
+        except Exception as e:
+            logging.exception("Getting exception, simply retry...")
+            continue
         try:
             cnt = struct.unpack("<Q", shm.buf[:8])[0]
             backtrace = pickle.loads(shm.buf[8:8+cnt])
