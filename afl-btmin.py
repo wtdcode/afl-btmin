@@ -81,7 +81,7 @@ def get_by_gdb(args: List[str], shm: SharedMemory, verbose: bool, use_stdin: boo
             else:
                 subprocess.check_call(gdb_args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=timeout, env=env)
         except subprocess.TimeoutExpired:
-            logging.warning("Timeout waiting for gdb, retry...")
+            logging.warning(f"Timeout waiting for gdb: {gdb_args}, retry...")
             continue
         except Exception as e:
             logging.exception("Getting exception, simply retry...")
