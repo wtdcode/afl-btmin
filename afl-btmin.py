@@ -215,6 +215,7 @@ if __name__ == "__main__":
                         actual_args.append(arg)
 
                 san_only_crash = False
+                backtrace = None
                 if backtrace is None and args.ubsan is not None:
                     actual_args[0] = args.ubsan
                     backtrace = get_by_asan(actual_args, args.verbose, use_stin, repeat, args.timeout)
