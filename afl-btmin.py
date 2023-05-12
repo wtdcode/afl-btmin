@@ -109,7 +109,7 @@ def get_by_asan(args: List[str], verbose: bool, use_stdin: bool, repeat: int, ti
         backtrace = []
 
         try:
-            if use_stin:
+            if use_stdin:
                 with open(crash_fname, "rb+") as f:
                     proc = subprocess.run(args, stdin=f, stderr=subprocess.PIPE, timeout=timeout, env=envs)
             else:
