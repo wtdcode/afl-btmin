@@ -132,7 +132,7 @@ def get_by_asan(args: List[str], verbose: bool, use_stdin: bool, repeat: int, ti
         logging.info(f"ASAN stderr: {output}")
         in_error = False
         for ln in lns:
-            if "ERROR" in ln or "WARNING" in ln:
+            if "ERROR" in ln or "WARNING" in ln or "runtime error" in ln:
                 in_error = True
 
             if in_error:
@@ -225,7 +225,7 @@ if __name__ == "__main__":
 
                 if backtrace is None and args.ubsan is not None:
                     actual_args[0] = args.ubsan
-                    backtrace = get_by_gdb(actual_args, shm, args.verbose, use_stin, repeat, args.timeout, shm_name)
+                    backtrace = get_by_asan(actual_args, args.verbose, use_stin, repeat, args.timeout)
                     if backtrace is not None:
                         logging.info("Got backtrace from UBSAN (gdb)")
                         san_only_crash = True
