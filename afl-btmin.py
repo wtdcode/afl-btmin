@@ -296,5 +296,6 @@ if __name__ == "__main__":
             bt_id += 1
         
     finally:
-        shm.close()
-        shm.unlink()
+        if not args.no_gdb:
+            shm.close()
+            shm.unlink()
