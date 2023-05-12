@@ -222,21 +222,21 @@ if __name__ == "__main__":
                     actual_args[0] = args.ubsan
                     backtrace = get_by_asan(actual_args, args.verbose, use_stin, repeat, args.timeout)
                     if backtrace is not None:
-                        logging.info("Got backtrace from UBSAN (gdb)")
+                        logging.info(f"Got backtrace {backtrace} from UBSAN (gdb)")
                         san_only_crash = True
 
                 if backtrace is None and args.asan is not None:
                     actual_args[0] = args.asan
                     backtrace = get_by_asan(actual_args, args.verbose, use_stin, repeat, args.timeout)
                     if backtrace is not None:
-                        logging.info("Got backtrace from ASAN")
+                        logging.info(f"Got backtrace {backtrace} from ASAN")
                         san_only_crash = True
                     
                 if backtrace is None and args.msan is not None:
                     actual_args[0] = args.msan
                     backtrace = get_by_asan(actual_args, args.verbose, use_stin, repeat, args.timeout)
                     if backtrace is not None:
-                        logging.info("Got backtrace from MSAN")
+                        logging.info(f"Got backtrace {backtrace} from MSAN")
                         san_only_crash = True           
 
                 if not args.no_gdb:
@@ -244,6 +244,8 @@ if __name__ == "__main__":
                     gdb_bt = get_by_gdb(actual_args, shm, args.verbose, use_stin, repeat, args.timeout, shm_name)
                     if gdb_bt is not None:
                         san_only_crash = False
+                        if backtrace is None:
+                            backtrace = gdb_bt
                 
                 if backtrace is None or len(backtrace) == 0:
                     logging.warning(f"Fail to get backtrace for {crash_fname}, skipped")
