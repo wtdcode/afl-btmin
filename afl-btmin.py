@@ -90,7 +90,7 @@ def get_by_gdb(args: List[str], shm: SharedMemory, verbose: bool, use_stdin: boo
             cnt = struct.unpack("<Q", shm.buf[:8])[0]
             backtrace = pickle.loads(shm.buf[8:8+cnt])
         except pickle.UnpicklingError as e:
-            logging.info(f"Fail to get backtrace for {fname} using gdb")
+            logging.info(f"Fail to get backtrace for {fname} using gdb, this could be fine")
             return None
         finally:
             shm.buf[:SHM_SIZE] = b'\x00' * SHM_SIZE
