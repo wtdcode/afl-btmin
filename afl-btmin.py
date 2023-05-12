@@ -118,24 +118,18 @@ def get_by_asan(args: List[str], verbose: bool, use_stdin: bool, repeat: int, ti
             logging.warning("Timeout waiting for sanitizers, retry...")
             continue
         
-        raw_stderr = proc.stderr
-        # Try to avoid decode non-utf-8 chars
-        idx = raw_stderr.find(b"ERROR")
-        if idx == -1:
-            idx = raw_stderr.find(b"WARNING")
-            if idx == -1:
-                idx = 0
-        
-        output = raw_stderr[idx:].decode("utf-8")
-        lns = output.split("\n")
+        raw_stderr = proc.stderr       
+        output = raw_stderr
+        lns = output.split(b"\n")
 
         logging.info(f"ASAN stderr: {output}")
         in_error = False
         for ln in lns:
-            if "ERROR" in ln or "WARNING" in ln or "runtime error" in ln:
+            if b"ERROR" in ln or b"WARNING" in ln or b"runtime error" in ln:
                 in_error = True
 
             if in_error:
+                ln = ln.decode("utf-8")
                 if "BuildId" in ln:
                     ln = " ".join(ln.strip().split(" ")[:-2])
                 tks = re.findall(r"#(\d+) [0-9xabcdef]+ in (.+) (.+)", ln)
