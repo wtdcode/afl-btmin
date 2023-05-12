@@ -101,15 +101,19 @@ def get_by_gdb(args: List[str], shm: SharedMemory, verbose: bool, use_stdin: boo
     return None
 
 def get_by_asan(args: List[str], verbose: bool, use_stdin: bool, repeat: int, timeout: int):
+    envs = os.environ.copy()
+    envs["ASAN_OPTIONS"] = "halt_on_error=1:abort_on_error=1:detect_leaks=0:print_stacktrace=1"
+    envs["MSAN_OPTIONS"] = "halt_on_error=1:abort_on_error=1:print_stacktrace=1"
+    envs["UBSAN_OPTIONS"] = "halt_on_error=1:abort_on_error=1:print_stacktrace=1"
     for _ in range(repeat):
         backtrace = []
 
         try:
             if use_stin:
                 with open(crash_fname, "rb+") as f:
-                    proc = subprocess.run(args, stdin=f, stderr=subprocess.PIPE, timeout=timeout)
+                    proc = subprocess.run(args, stdin=f, stderr=subprocess.PIPE, timeout=timeout, env=envs)
             else:
-                proc = subprocess.run(args, stderr=subprocess.PIPE, timeout=timeout)
+                proc = subprocess.run(args, stderr=subprocess.PIPE, timeout=timeout, env=envs)
         except subprocess.TimeoutExpired:
             logging.warning("Timeout waiting for sanitizers, retry...")
             continue
