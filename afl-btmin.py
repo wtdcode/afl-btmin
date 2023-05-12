@@ -165,6 +165,7 @@ if __name__ == "__main__":
     p.add_argument("--ubsan", type=str, help="UBSAN binary (trapp instrumented)")
     p.add_argument("--timeout", type=int, default=5, help="Timeout for a single run")
     p.add_argument("--repeat", type=int, default=5, help="Repeat execution in case the crash is not stable")
+    p.add_argument("--no-gdb", default=False, action="store_true", help="No gdb")
 
     program_args = None
     our_args = None
@@ -185,9 +186,10 @@ if __name__ == "__main__":
     if args.verbose:
         logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(message)s', force=True)
 
-    remove_shm_from_resource_tracker()
-    shm_name = f"afl-btmin-{os.getpid()}"
-    shm = SharedMemory(name=shm_name, create=True, size=SHM_SIZE)
+    if not args.no_gdb:
+        remove_shm_from_resource_tracker()
+        shm_name = f"afl-btmin-{os.getpid()}"
+        shm = SharedMemory(name=shm_name, create=True, size=SHM_SIZE)
     try:
         bts: Mapping[Tuple, List[str]]  = {}
         cnt = 0
@@ -237,10 +239,11 @@ if __name__ == "__main__":
                         logging.info("Got backtrace from MSAN")
                         san_only_crash = True           
 
-                actual_args[0] = program_args[0]
-                gdb_bt = get_by_gdb(actual_args, shm, args.verbose, use_stin, repeat, args.timeout, shm_name)
-                if gdb_bt is not None:
-                    san_only_crash = False
+                if not args.no_gdb:
+                    actual_args[0] = program_args[0]
+                    gdb_bt = get_by_gdb(actual_args, shm, args.verbose, use_stin, repeat, args.timeout, shm_name)
+                    if gdb_bt is not None:
+                        san_only_crash = False
                 
                 if backtrace is None or len(backtrace) == 0:
                     logging.warning(f"Fail to get backtrace for {crash_fname}, skipped")
