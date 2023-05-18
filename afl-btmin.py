@@ -111,9 +111,9 @@ def get_by_asan(args: List[str], verbose: bool, use_stdin: bool, repeat: int, ti
         try:
             if use_stdin:
                 with open(crash_fname, "rb+") as f:
-                    proc = subprocess.run(args, stdin=f, stderr=subprocess.PIPE, timeout=timeout, env=envs)
+                    proc = subprocess.run(args, stdin=f, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout, env=envs)
             else:
-                proc = subprocess.run(args, stderr=subprocess.PIPE, timeout=timeout, env=envs)
+                proc = subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout, env=envs)
         except subprocess.TimeoutExpired:
             logging.warning("Timeout waiting for sanitizers, retry...")
             continue
