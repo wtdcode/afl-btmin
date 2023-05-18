@@ -74,6 +74,9 @@ def get_by_gdb(args: List[str], shm: SharedMemory, verbose: bool, use_stdin: boo
         ] + args
         env = os.environ.copy()
         env["AFL_BTMIN_SHM"] = shm_name
+        env["ASAN_OPTIONS"] = "halt_on_error=1:abort_on_error=1:detect_leaks=0:print_stacktrace=1"
+        env["MSAN_OPTIONS"] = "halt_on_error=1:abort_on_error=1:print_stacktrace=1"
+        env["UBSAN_OPTIONS"] = "halt_on_error=1:abort_on_error=1:print_stacktrace=1"
         try:
             if verbose:
                 logging.info(f"gdb_args: {' '.join(gdb_args)}")
