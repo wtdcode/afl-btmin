@@ -145,12 +145,17 @@ def get_by_asan(args: List[str], verbose: bool, use_stdin: bool, repeat: int, ti
                 ln_tks = tks[2].split(":")
                 if len(ln_tks) > 1:
                     ln_num = int(ln_tks[1])
-                    src = ln_tks[0]
-                else:
+                    src = Path(ln_tks[0]).name
+                else: 
+                    path_tks = re.findall(r"\((.*)\+([0-9xabcdef]+)\)", tks[2])
                     ln_num = 0
-                    src = ln_tks[0]
+                    if len(path_tks) == 1 and len(path_tks[0]) == 2:
+                        src_path, offset = path_tks[0]
+                        src = f"{Path(src_path).name}+{offset}"
+                    else:
+                        src = Path(ln_tks[0]).name
 
-                backtrace.append((tks[1], Path(src).name, ln_num))
+                backtrace.append((tks[1], src, ln_num))
 
         if len(backtrace) != 0:
             return backtrace
