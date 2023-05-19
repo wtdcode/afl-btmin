@@ -75,7 +75,7 @@ def get_by_gdb(args: List[str], shm: SharedMemory, verbose: bool, use_stdin: boo
         env = os.environ.copy()
         env["AFL_BTMIN_SHM"] = shm_name
         env["ASAN_OPTIONS"] = "halt_on_error=1:abort_on_error=1:detect_leaks=0:print_stacktrace=1"
-        env["MSAN_OPTIONS"] = "halt_on_error=1:abort_on_error=1:print_stacktrace=1:max_allocation_size_mb=2047:allocator_may_return_null=false"
+        env["MSAN_OPTIONS"] = "halt_on_error=1:abort_on_error=1:print_stacktrace=1:max_allocation_size_mb=2047:allocator_may_return_null=false" # We are at gdb, let it break early
         env["UBSAN_OPTIONS"] = "halt_on_error=1:abort_on_error=1:print_stacktrace=1"
         try:
             if verbose:
@@ -105,7 +105,7 @@ def get_by_gdb(args: List[str], shm: SharedMemory, verbose: bool, use_stdin: boo
 
 def get_by_asan(args: List[str], verbose: bool, use_stdin: bool, repeat: int, timeout: int):
     envs = os.environ.copy()
-    envs["ASAN_OPTIONS"] = "halt_on_error=1:abort_on_error=1:detect_leaks=0:print_stacktrace=1:allocator_may_return_null=1"
+    envs["ASAN_OPTIONS"] = "halt_on_error=1:abort_on_error=1:detect_leaks=0:print_stacktrace=1:allocator_may_return_null=1" # We are sanitizers, let it abort later by the program itself to get consistent stacktrace
     envs["MSAN_OPTIONS"] = "halt_on_error=1:abort_on_error=1:print_stacktrace=1"
     envs["UBSAN_OPTIONS"] = "halt_on_error=1:abort_on_error=1:print_stacktrace=1"
     for _ in range(repeat):
