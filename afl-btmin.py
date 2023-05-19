@@ -192,7 +192,7 @@ if __name__ == "__main__":
 
     args = p.parse_args(our_args[1:])
 
-    seq = our_args.sequence
+    seq = args.sequence
     if len(seq) != 3 or not ("a" in seq and "u" in seq and "m" in seq):
         sys.stderr.write("sequence should be like uam, where u-ubsan a-asan m-msan")
         exit(-1)
