@@ -170,10 +170,11 @@ if __name__ == "__main__":
     p.add_argument("--top", default=3, type=int, help="Use top N frames to dedup")
     p.add_argument("--asan", type=str, help="ASAN binary for sanitizer crashes")
     p.add_argument("--msan", type=str, help="MSAN binary for sanitizer crashes")
-    p.add_argument("--ubsan", type=str, help="UBSAN binary (trapp instrumented)")
+    p.add_argument("--ubsan", type=str, help="UBSAN binary (can be recovered!)")
     p.add_argument("--timeout", type=int, default=5, help="Timeout for a single run")
     p.add_argument("--repeat", type=int, default=5, help="Repeat execution in case the crash is not stable")
     p.add_argument("--no-gdb", default=False, action="store_true", help="No gdb")
+    p.add_argument("--sequence", type=str, default="uam", help="sequence of the sanitizers")
 
     program_args = None
     our_args = None
@@ -190,6 +191,20 @@ if __name__ == "__main__":
         our_args = sys.argv
 
     args = p.parse_args(our_args[1:])
+
+    seq = our_args.sequence
+    if len(seq) != 3 or not ("a" in seq and "u" in seq and "m" in seq):
+        sys.stderr.write("sequence should be like uam, where u-ubsan a-asan m-msan")
+        exit(-1)
+        
+    seq_mapping = {
+        "a": args.asan,
+        "u": args.ubsan,
+        "m": args.msan
+    }
+    
+    sans = [seq_mapping[s] for s in seq]
+    
     repeat = int(args.repeat)
     if args.verbose:
         logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(message)s', force=True)
@@ -226,26 +241,14 @@ if __name__ == "__main__":
 
                 san_only_crash = False
                 backtrace = None
-                if backtrace is None and args.ubsan is not None:
-                    actual_args[0] = args.ubsan
-                    backtrace = get_by_asan(actual_args, args.verbose, use_stin, repeat, args.timeout)
-                    if backtrace is not None:
-                        logging.info(f"Got backtrace {backtrace} from UBSAN (gdb)")
-                        san_only_crash = True
-
-                if backtrace is None and args.asan is not None:
-                    actual_args[0] = args.asan
-                    backtrace = get_by_asan(actual_args, args.verbose, use_stin, repeat, args.timeout)
-                    if backtrace is not None:
-                        logging.info(f"Got backtrace {backtrace} from ASAN")
-                        san_only_crash = True
-                    
-                if backtrace is None and args.msan is not None:
-                    actual_args[0] = args.msan
-                    backtrace = get_by_asan(actual_args, args.verbose, use_stin, repeat, args.timeout)
-                    if backtrace is not None:
-                        logging.info(f"Got backtrace {backtrace} from MSAN")
-                        san_only_crash = True           
+                for san in sans:
+                    if san is not None:
+                        actual_args[0] = san
+                        backtrace = get_by_asan(actual_args, args.verbose, use_stin, repeat, args.timeout)
+                        if backtrace is not None:
+                            logging.info(f"Got backtrace {backtrace} from {san}")
+                            san_only_crash = True
+                            break       
 
                 if not args.no_gdb:
                     actual_args[0] = program_args[0]
