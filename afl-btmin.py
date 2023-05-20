@@ -112,10 +112,12 @@ def get_by_asan(args: List[str], verbose: bool, use_stdin: bool, repeat: int, ti
     envs["MSAN_OPTIONS"] = "halt_on_error=1:abort_on_error=1:print_stacktrace=1"
     envs["UBSAN_OPTIONS"] = "halt_on_error=1:abort_on_error=1:print_stacktrace=1"
     meta = {
-        "lines": []
+        "lines": [],
+        "regions": []
     }
     for _ in range(repeat):
         backtrace = []
+        region_trace = []
 
         try:
             if use_stdin:
@@ -133,19 +135,28 @@ def get_by_asan(args: List[str], verbose: bool, use_stdin: bool, repeat: int, ti
 
         logging.info(f"ASAN stderr: {output}")
         in_error = False
+        in_located = False
         for ln in lns:
             if b"ERROR" in ln or b"WARNING" in ln or b"runtime error" in ln:
                 in_error = True
 
-            if in_error:
+            if b"is located" in ln:
+                in_located = True
+                
+            if in_error or in_located:
                 ln = ln.decode("utf-8")
                 if "BuildId" in ln:
                     ln = " ".join(ln.strip().split(" ")[:-2])
                 tks = re.findall(r"#(\d+) [0-9xabcdef]+ in (.+) (.+)", ln)
 
                 if len(tks) == 0:
-                    if len(backtrace) != 0:
+                    if len(backtrace) != 0 or len(region_trace) != 0:
                         in_error = False
+                        in_located = False
+                        
+                        if len(region_trace) != 0:
+                            meta["regions"].append(region_trace)
+                            region_trace = []
                     continue
                 tks = tks[0]
                 ln_tks = tks[2].split(":")
@@ -171,9 +182,11 @@ def get_by_asan(args: List[str], verbose: bool, use_stdin: bool, repeat: int, ti
                             lncontent = fcontent[ln_num - 1]
                         else:
                             lncontent = "<No available source>"
-
-                backtrace.append((tks[1], src, ln_num))
-                meta["lines"].append(lncontent)
+                if in_error:
+                    backtrace.append((tks[1], src, ln_num))
+                    meta["lines"].append(lncontent)
+                else:
+                    region_trace.append((tks[1], src, ln_num))
 
         if len(backtrace) != 0:
             return backtrace, meta
