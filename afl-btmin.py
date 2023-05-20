@@ -47,6 +47,9 @@ logging.basicConfig(level=logging.WARNING, format='[%(asctime)s] %(message)s')
 
 
 def get_by_gdb(args: List[str], shm: SharedMemory, verbose: bool, use_stdin: bool, repeat: int, timeout: int, shm_name: str):
+    meta = {
+        "lines": []
+    }
     for _ in range(repeat):
         shm.buf[:8] = struct.pack("<Q", 114514)
 
@@ -108,6 +111,9 @@ def get_by_asan(args: List[str], verbose: bool, use_stdin: bool, repeat: int, ti
     envs["ASAN_OPTIONS"] = "halt_on_error=1:abort_on_error=1:detect_leaks=0:print_stacktrace=1"
     envs["MSAN_OPTIONS"] = "halt_on_error=1:abort_on_error=1:print_stacktrace=1"
     envs["UBSAN_OPTIONS"] = "halt_on_error=1:abort_on_error=1:print_stacktrace=1"
+    meta = {
+        "lines": []
+    }
     for _ in range(repeat):
         backtrace = []
 
@@ -146,16 +152,28 @@ def get_by_asan(args: List[str], verbose: bool, use_stdin: bool, repeat: int, ti
                 if len(ln_tks) > 1:
                     ln_num = int(ln_tks[1])
                     src = Path(ln_tks[0]).name
+                    if Path(ln_tks[0]).exists():
+                        fcontent = open(ln_tks[0]).read().split("\n")
+                        lncontent = fcontent[ln_num - 1]
+                    else:
+                        lncontent = "<No available source>"
                 else: 
                     path_tks = re.findall(r"\((.*)\+([0-9xabcdef]+)\)", tks[2])
                     ln_num = 0
                     if len(path_tks) == 1 and len(path_tks[0]) == 2:
                         src_path, offset = path_tks[0]
                         src = f"{Path(src_path).name}+{offset}"
+                        lncontent = "<No available source>"
                     else:
                         src = Path(ln_tks[0]).name
+                        if Path(ln_tks[0]).exists():
+                            fcontent = open(ln_tks[0]).read().split("\n")
+                            lncontent = fcontent[ln_num - 1]
+                        else:
+                            lncontent = "<No available source>"
 
                 backtrace.append((tks[1], src, ln_num))
+                meta["lines"].append(lncontent)
 
         if len(backtrace) != 0:
             return backtrace
@@ -174,6 +192,7 @@ if __name__ == "__main__":
     p.add_argument("--timeout", type=int, default=5, help="Timeout for a single run")
     p.add_argument("--repeat", type=int, default=5, help="Repeat execution in case the crash is not stable")
     p.add_argument("--no-gdb", default=False, action="store_true", help="No gdb")
+    p.add_argument("--meta", default=False, action="store_true", help="Store extra meta")
     p.add_argument("--sequence", type=str, default="uam", help="sequence of the sanitizers")
 
     program_args = None
@@ -215,6 +234,7 @@ if __name__ == "__main__":
         shm = SharedMemory(name=shm_name, create=True, size=SHM_SIZE)
     try:
         bts: Mapping[Tuple, List[str]]  = {}
+        metas: Mapping[Tuple, dict] = {}
         cnt = 0
 
         for fname in os.listdir(Path(args.input)):
@@ -244,7 +264,7 @@ if __name__ == "__main__":
                 for san in sans:
                     if san is not None:
                         actual_args[0] = san
-                        backtrace = get_by_asan(actual_args, args.verbose, use_stin, repeat, args.timeout)
+                        backtrace, meta = get_by_asan(actual_args, args.verbose, use_stin, repeat, args.timeout)
                         if backtrace is not None:
                             logging.info(f"Got backtrace {backtrace} from {san}")
                             san_only_crash = True
@@ -268,6 +288,7 @@ if __name__ == "__main__":
                 if backtrace not in bts:
                     bts[backtrace] = []
                 bts[backtrace].append((fname, san_only_crash))
+                metas[backtrace] = meta
 
         # check if all backtraces are of the same length
         min_length = int(args.top)
@@ -276,14 +297,16 @@ if __name__ == "__main__":
                 min_length = len(bt)
         
         new_bts = {}
+        new_meta = {}
         for bt, names in bts.items():
             new_bt = bt[:min_length]
             if new_bt not in new_bts:
                 new_bts[new_bt] = []
             new_bts[new_bt].extend(names)
+            new_meta[new_bt] = metas[bt]
         
         bts = new_bts
-
+        metas = new_meta
         
         sys.stderr.write(f"{len(bts)} unique backtrace found\n")
 
@@ -295,6 +318,10 @@ if __name__ == "__main__":
             with open(bt_dir / f"{str(bt_id)}.json", "w+") as f:
                 json.dump(bt, f, indent=4)
 
+            if args.meta:
+                with open(bt_dir / f"{str(bt_id)}.json.meta", "w+") as f:
+                    json.dump(new_meta[bt], f, indent=4)
+            
             for fname, san_only in fnames:
                 suffix = Path(fname).suffix
                 stem = Path(fname).stem
