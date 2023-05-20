@@ -288,7 +288,7 @@ if __name__ == "__main__":
         sys.stderr.write(f"{len(bts)} unique backtrace found\n")
 
         bt_dir = Path(args.input) / "backtraces"
-        shutil.rmtree(bt_dir)
+        shutil.rmtree(bt_dir, ignore_errors=True)
         os.makedirs(bt_dir, exist_ok=True)
         bt_id = 0
         for bt, fnames in bts.items():
