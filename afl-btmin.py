@@ -116,9 +116,7 @@ def get_by_asan(args: List[str], verbose: bool, use_stdin: bool, repeat: int, ti
         "regions": []
     }
     for _ in range(repeat):
-        backtrace = []
-        region_trace = []
-
+        
         try:
             if use_stdin:
                 with open(crash_fname, "rb+") as f:
@@ -136,6 +134,9 @@ def get_by_asan(args: List[str], verbose: bool, use_stdin: bool, repeat: int, ti
         logging.info(f"ASAN stderr: {output}")
         in_error = False
         in_located = False
+        backtrace = []
+        region_trace = []
+        return_backtrace = []
         for ln in lns:
             if b"ERROR" in ln or b"WARNING" in ln or b"runtime error" in ln:
                 in_error = True
@@ -150,13 +151,13 @@ def get_by_asan(args: List[str], verbose: bool, use_stdin: bool, repeat: int, ti
                 tks = re.findall(r"#(\d+) [0-9xabcdef]+ in (.+) (.+)", ln)
 
                 if len(tks) == 0:
-                    if len(backtrace) != 0 or len(region_trace) != 0:
+                    if len(backtrace) != 0 and in_error:
+                        return_backtrace = backtrace
                         in_error = False
+                    if len(region_trace) != 0 and in_located:
                         in_located = False
-                        
-                        if len(region_trace) != 0:
-                            meta["regions"].append(region_trace)
-                            region_trace = []
+                        meta["regions"].append(region_trace)
+                        region_trace = []
                     continue
                 tks = tks[0]
                 ln_tks = tks[2].split(":")
@@ -188,8 +189,8 @@ def get_by_asan(args: List[str], verbose: bool, use_stdin: bool, repeat: int, ti
                 else:
                     region_trace.append((tks[1], src, ln_num))
 
-        if len(backtrace) != 0:
-            return backtrace, meta
+        if len(return_backtrace) != 0:
+            return return_backtrace, meta
 
     return None, None
 
