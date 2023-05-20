@@ -105,7 +105,7 @@ def get_by_gdb(args: List[str], shm: SharedMemory, verbose: bool, use_stdin: boo
 
 def get_by_asan(args: List[str], verbose: bool, use_stdin: bool, repeat: int, timeout: int):
     envs = os.environ.copy()
-    envs["ASAN_OPTIONS"] = "halt_on_error=1:abort_on_error=1:detect_leaks=0:print_stacktrace=1:allocator_may_return_null=1" # We are sanitizers, let it abort later by the program itself to get consistent stacktrace
+    envs["ASAN_OPTIONS"] = "halt_on_error=1:abort_on_error=1:detect_leaks=0:print_stacktrace=1"
     envs["MSAN_OPTIONS"] = "halt_on_error=1:abort_on_error=1:print_stacktrace=1"
     envs["UBSAN_OPTIONS"] = "halt_on_error=1:abort_on_error=1:print_stacktrace=1"
     for _ in range(repeat):
