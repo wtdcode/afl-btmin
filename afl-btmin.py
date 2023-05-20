@@ -176,9 +176,9 @@ def get_by_asan(args: List[str], verbose: bool, use_stdin: bool, repeat: int, ti
                 meta["lines"].append(lncontent)
 
         if len(backtrace) != 0:
-            return backtrace
+            return backtrace, meta
 
-    return None
+    return None, None
 
 if __name__ == "__main__":
     p = ArgumentParser("afl-btmin")
