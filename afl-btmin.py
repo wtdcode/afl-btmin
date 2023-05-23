@@ -171,24 +171,24 @@ def get_by_asan(args: List[str], verbose: bool, use_stdin: bool, repeat: int, ti
                     ln_num = int(ln_tks[1])
                     src = Path(ln_tks[0]).name
                     if Path(ln_tks[0]).exists():
-                        fcontent = open(ln_tks[0]).read().split("\n")
+                        fcontent = open(ln_tks[0], "rb").read().split(b"\n")
                         lncontent = fcontent[ln_num - 1]
                     else:
-                        lncontent = "<No available source>"
+                        lncontent = b"<No available source>"
                 else: 
                     path_tks = re.findall(r"\((.*)\+([0-9xabcdef]+)\)", tks[2])
                     ln_num = 0
                     if len(path_tks) == 1 and len(path_tks[0]) == 2:
                         src_path, offset = path_tks[0]
                         src = f"{Path(src_path).name}+{offset}"
-                        lncontent = "<No available source>"
+                        lncontent = b"<No available source>"
                     else:
                         src = Path(ln_tks[0]).name
                         if Path(ln_tks[0]).exists():
-                            fcontent = open(ln_tks[0]).read().split("\n")
+                            fcontent = open(ln_tks[0], "rb").read().split(b"\n")
                             lncontent = fcontent[ln_num - 1]
                         else:
-                            lncontent = "<No available source>"
+                            lncontent = b"<No available source>"
                 if in_error:
                     backtrace.append((tks[1], src, ln_num))
                     meta["lines"].append(lncontent)
