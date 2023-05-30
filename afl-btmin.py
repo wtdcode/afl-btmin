@@ -119,7 +119,8 @@ def get_by_asan(args: List[str], verbose: bool, use_stdin: bool, repeat: int, ti
         envs["UBSAN_OPTIONS"] = "halt_on_error=1:abort_on_error=1:print_stacktrace=1"
     meta = {
         "lines": [],
-        "regions": []
+        "regions": [],
+        "out_san": []
     }
     for _ in range(repeat):
         
@@ -136,6 +137,13 @@ def get_by_asan(args: List[str], verbose: bool, use_stdin: bool, repeat: int, ti
         raw_stderr = proc.stderr       
         output = raw_stderr
         lns = output.split(b"\n")
+        
+        if b"UndefinedBehaviorSanitizer" in output:
+            meta['out_san'].append("ubsan")
+        elif b"MemorySanitizer" in output:
+            meta['out_san'].append("msan")
+        elif b"AddressSanitizer" in output:
+            meta['out_san'].append("asan")
 
         logging.info(f"ASAN stderr: {output}")
         in_error = False
@@ -296,10 +304,10 @@ if __name__ == "__main__":
                         if backtrace is not None:
                             logging.info(f"Got backtrace {backtrace} from {san}")
                             san_only_crash = True
-                            if san == args.ubsan:
+                            if meta is not None and "out_san" in meta and "ubsan" in meta['out_san']:
                                 backtrace = backtrace[:1]
-                                if meta is not None:
-                                    meta['san'] = san
+                            if meta is not None:
+                                meta['san'] = san
                             break       
 
                 if not args.no_gdb:
