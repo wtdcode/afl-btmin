@@ -296,6 +296,10 @@ if __name__ == "__main__":
                         if backtrace is not None:
                             logging.info(f"Got backtrace {backtrace} from {san}")
                             san_only_crash = True
+                            if san == args.ubsan:
+                                backtrace = backtrace[:1]
+                                if meta is not None:
+                                    meta['san'] = san
                             break       
 
                 if not args.no_gdb:
