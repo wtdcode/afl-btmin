@@ -304,8 +304,8 @@ if __name__ == "__main__":
                         if backtrace is not None:
                             logging.info(f"Got backtrace {backtrace} from {san}")
                             san_only_crash = True
-                            if meta is not None and "out_san" in meta and "ubsan" in meta['out_san']:
-                                backtrace = backtrace[:1]
+                            # if meta is not None and "out_san" in meta and "ubsan" in meta['out_san']:
+                            #     backtrace = backtrace[:1]
                             if meta is not None:
                                 meta['san'] = san
                             break       
