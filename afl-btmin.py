@@ -159,7 +159,11 @@ def get_by_asan(args: List[str], verbose: bool, use_stdin: bool, repeat: int, ti
                 in_located = True
                 
             if in_error or in_located:
-                ln = ln.decode("utf-8")
+                try:
+                    ln = ln.decode("utf-8")
+                except UnicodeDecodeError as e:
+                    print(f"Decode failure {str(e)} for line: {ln}")
+                    continue
                 if "BuildId" in ln:
                     ln = " ".join(ln.strip().split(" ")[:-2])
                 tks = re.findall(r"#(\d+) [0-9xabcdef]+ in (.+) (.+)", ln)
