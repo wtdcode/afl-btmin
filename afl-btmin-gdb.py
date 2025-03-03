@@ -72,6 +72,8 @@ def load_shm():
         print("Share memory doesn't exist!")
         return None
 
+
+
 class FrameFilter():
 
     def __init__(self) -> None:
@@ -81,15 +83,36 @@ class FrameFilter():
         self.__debug = "BTMIN_DEBUG" in os.environ
         gdb.frame_filters[self.name] = self
 
+    def _pc_to_function(self, pc: int):
+        # Shit! We have to parse gdb command.
+        cmd = f"info symbol 0x{pc:x}"
+        out = gdb.execute(cmd, to_string=True)
+        if self.__debug:
+            print(f"{cmd}, out: {out}")
+        if out.startswith("No symbol"):
+            return None
+        tokens = out.split(" ")
+        if len(tokens) > 0:
+            return tokens[0]
+        else:
+            print(f"Can't handle info symbol out: {out}")
+            return None
+    
     def _gen_backtrace(self, frames: List[FrameDecorator]):
         backtraces = []
 
         for frame in frames:
-            if self.__debug:
-                print(f"frame is {frame}")
             func = frame.function()
+            if isinstance(func, int):
+                func_info = self._pc_to_function(func)
+                if func_info is not None:
+                    func = func_info
+                else:
+                    func = str(func)
             fname = frame.filename()
             ln = frame.line()
+            if self.__debug:
+                print(f"func: {func} fname: {fname} ln: {ln}")
 
             if fname is not None:
                 if Path(fname).exists():
