@@ -85,21 +85,12 @@ class FrameFilter():
 
         for frame in frames:
             func = frame.function()
-
-            if func == frame.inferior_frame().pc():
-                # In this case, gdb fails to find a function boundary, it happens mostly for
-                # libc subroutines in assembly files.
-                func = None
-            
             fname = frame.filename()
-
-            # We have to add line numbers for functions (like overloaded) which shares the same name.
             ln = frame.line()
 
-            if fname is None:
-                fname = None
-            else:
-                fname = str(Path(fname).absolute())
+            if fname is not None:
+                if Path(fname).exists():
+                    fname = str(Path(fname).absolute())
             address = frame.address()
             backtraces.append((address, func, fname, ln))
         
