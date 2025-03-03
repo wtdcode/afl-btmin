@@ -268,6 +268,7 @@ if __name__ == "__main__":
         actual_args = program_args[:]
         san_only_crash = False
         backtrace = None
+        meta = None
         for san in sans:
             if san is not None:
                 actual_args[0] = san
