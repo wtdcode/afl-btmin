@@ -8,35 +8,55 @@ from itertools import tee
 from multiprocessing.shared_memory import SharedMemory
 from multiprocessing import resource_tracker
 from pathlib import Path
+from multiprocessing import resource_tracker as _mprt
+from multiprocessing import shared_memory as _mpshm
+import threading
 import os
+import sys
 
-# SHM_NAME = "afl-btmin-shm"
 
-# Workaround found at https://stackoverflow.com/questions/64102502/shared-memory-deleted-at-exit
-# for https://bugs.python.org/issue39959
-def remove_shm_from_resource_tracker():
-    """Monkey-patch multiprocessing.resource_tracker so SharedMemory won't be tracked
+# Copy Paste from https://github.com/python/cpython/issues/82300#issuecomment-2692889533
+if sys.version_info >= (3, 13):
+    SharedMemory = _mpshm.SharedMemory
+else:
+    class SharedMemory(_mpshm.SharedMemory):
+        __lock = threading.Lock()
 
-    More details at: https://bugs.python.org/issue38119
-    """
+        def __init__(
+            self, name: str | None = None, create: bool = False,
+            size: int = 0, *, track: bool = True
+        ) -> None:
+            self._track = track
 
-    def fix_register(name, rtype):
-        if rtype == "shared_memory":
+            # if tracking, normal init will suffice
+            if track:
+                return super().__init__(name=name, create=create, size=size)
+
+            # lock so that other threads don't attempt to use the
+            # register function during this time
+            with self.__lock:
+                # temporarily disable registration during initialization
+                orig_register = _mprt.register
+                _mprt.register = self.__tmp_register
+
+                # initialize; ensure original register function is
+                # re-instated
+                try:
+                    super().__init__(name=name, create=create, size=size)
+                finally:
+                    _mprt.register = orig_register
+
+        @staticmethod
+        def __tmp_register(*args, **kwargs) -> None:
             return
-        return resource_tracker._resource_tracker.register(name, rtype)
-    resource_tracker.register = fix_register
 
-    def fix_unregister(name, rtype):
-        if rtype == "shared_memory":
-            return
-        return resource_tracker._resource_tracker.unregister(name, rtype)
-    resource_tracker.unregister = fix_unregister
-
-    if "shared_memory" in resource_tracker._CLEANUP_FUNCS:
-        del resource_tracker._CLEANUP_FUNCS["shared_memory"]
+        def unlink(self) -> None:
+            if _mpshm._USE_POSIX and self._name:
+                _mpshm._posixshmem.shm_unlink(self._name)
+                if self._track:
+                    _mprt.unregister(self._name, "shared_memory")
 
 def load_shm():
-    remove_shm_from_resource_tracker()
     try:
         shm_name = os.getenv("AFL_BTMIN_SHM")
         if shm_name is None:
@@ -68,10 +88,8 @@ class FrameFilter():
 
             if func == frame.inferior_frame().pc():
                 # In this case, gdb fails to find a function boundary, it happens mostly for
-                # libc subroutines in assembly files. It's fairly enough to use filenames and
-                # line numbers to identify the backtrace in this case, so we assign a fake pc
-                # to avoid generate different backtrace.
-                func = "0x19260817"
+                # libc subroutines in assembly files.
+                func = None
             
             fname = frame.filename()
 
@@ -79,10 +97,11 @@ class FrameFilter():
             ln = frame.line()
 
             if fname is None:
-                fname = "nosource"
+                fname = None
             else:
-                fname = Path(fname).name
-            backtraces.append((func, fname, ln))
+                fname = str(Path(fname).absolute())
+            address = frame.address()
+            backtraces.append((address, func, fname, ln))
         
         return tuple(backtraces)
 

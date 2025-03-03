@@ -2,9 +2,11 @@
 
 from argparse import ArgumentParser
 from pathlib import Path
+from multiprocessing import resource_tracker as _mprt
+from multiprocessing import shared_memory as _mpshm
 from multiprocessing.shared_memory import SharedMemory
-from typing import Mapping, Tuple, List
-from multiprocessing import resource_tracker
+from typing import Mapping, Tuple, List, Optional
+import threading
 import subprocess
 import sys
 import struct
@@ -16,28 +18,46 @@ import json
 import shutil
 import os
 
-# Workaround found at https://stackoverflow.com/questions/64102502/shared-memory-deleted-at-exit
-# for https://bugs.python.org/issue39959
-def remove_shm_from_resource_tracker():
-    """Monkey-patch multiprocessing.resource_tracker so SharedMemory won't be tracked
+# Copy Paste from https://github.com/python/cpython/issues/82300#issuecomment-2692889533
+if sys.version_info >= (3, 13):
+    SharedMemory = _mpshm.SharedMemory
+else:
+    class SharedMemory(_mpshm.SharedMemory):
+        __lock = threading.Lock()
 
-    More details at: https://bugs.python.org/issue38119
-    """
+        def __init__(
+            self, name: str | None = None, create: bool = False,
+            size: int = 0, *, track: bool = True
+        ) -> None:
+            self._track = track
 
-    def fix_register(name, rtype):
-        if rtype == "shared_memory":
+            # if tracking, normal init will suffice
+            if track:
+                return super().__init__(name=name, create=create, size=size)
+
+            # lock so that other threads don't attempt to use the
+            # register function during this time
+            with self.__lock:
+                # temporarily disable registration during initialization
+                orig_register = _mprt.register
+                _mprt.register = self.__tmp_register
+
+                # initialize; ensure original register function is
+                # re-instated
+                try:
+                    super().__init__(name=name, create=create, size=size)
+                finally:
+                    _mprt.register = orig_register
+
+        @staticmethod
+        def __tmp_register(*args, **kwargs) -> None:
             return
-        return resource_tracker._resource_tracker.register(name, rtype)
-    resource_tracker.register = fix_register
 
-    def fix_unregister(name, rtype):
-        if rtype == "shared_memory":
-            return
-        return resource_tracker._resource_tracker.unregister(name, rtype)
-    resource_tracker.unregister = fix_unregister
-
-    if "shared_memory" in resource_tracker._CLEANUP_FUNCS:
-        del resource_tracker._CLEANUP_FUNCS["shared_memory"]
+        def unlink(self) -> None:
+            if _mpshm._USE_POSIX and self._name:
+                _mpshm._posixshmem.shm_unlink(self._name)
+                if self._track:
+                    _mprt.unregister(self._name, "shared_memory")
 
 
 # SHM_NAME = "afl-btmin-shm"
@@ -46,10 +66,7 @@ SHM_SIZE = (1 << 16)
 logging.basicConfig(level=logging.WARNING, format='[%(asctime)s] %(message)s')
 
 
-def get_by_gdb(args: List[str], shm: SharedMemory, verbose: bool, use_stdin: bool, repeat: int, timeout: int, shm_name: str):
-    meta = {
-        "lines": []
-    }
+def get_by_gdb(args: List[str], shm: SharedMemory, verbose: bool, use_stdin: Optional[str], repeat: int, timeout: int, shm_name: str):
     for _ in range(repeat):
         shm.buf[:8] = struct.pack("<Q", 114514)
 
@@ -58,15 +75,15 @@ def get_by_gdb(args: List[str], shm: SharedMemory, verbose: bool, use_stdin: boo
             "gdb"
         ]
 
-        if use_stin:
-            run_args = ["-ex", f"r < {str(crash_fname.absolute())}"]
+        if use_stdin is not None:
+            run_args = ["-ex", f"r < {str(Path(use_stdin).absolute())}"]
         else:
             run_args = ["-ex", "r"]
 
         gdb_args += [
             "-ex", "set confirm off",
             "-ex", "set pagination off",
-            "-ex", f"set backtrace limit 10"] + run_args + [
+            "-ex", f"set backtrace limit 32"] + run_args + [
             "-ex", "bt",
             "-ex", "q"
         ]
@@ -99,7 +116,7 @@ def get_by_gdb(args: List[str], shm: SharedMemory, verbose: bool, use_stdin: boo
             cnt = struct.unpack("<Q", shm.buf[:8])[0]
             backtrace = pickle.loads(shm.buf[8:8+cnt])
         except pickle.UnpicklingError as e:
-            logging.info(f"Fail to get backtrace for {fname} using gdb, this could be fine")
+            logging.info(f"Fail to get backtrace for {use_stdin} using gdb, this could be fine")
             return None
         finally:
             shm.buf[:SHM_SIZE] = b'\x00' * SHM_SIZE
@@ -109,7 +126,7 @@ def get_by_gdb(args: List[str], shm: SharedMemory, verbose: bool, use_stdin: boo
     
     return None
 
-def get_by_asan(args: List[str], verbose: bool, use_stdin: bool, repeat: int, timeout: int):
+def get_by_asan(args: List[str], verbose: bool, use_stdin: Optional[str], repeat: int, timeout: int):
     envs = os.environ.copy()
     if "ASAN_OPTIONS" not in envs:
         envs["ASAN_OPTIONS"] = "halt_on_error=1:abort_on_error=1:detect_leaks=0:print_stacktrace=1"
@@ -125,8 +142,8 @@ def get_by_asan(args: List[str], verbose: bool, use_stdin: bool, repeat: int, ti
     for _ in range(repeat):
         
         try:
-            if use_stdin:
-                with open(crash_fname, "rb+") as f:
+            if use_stdin is not None:
+                with open(use_stdin, "rb+") as f:
                     proc = subprocess.run(args, stdin=f, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout, env=envs)
             else:
                 proc = subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout, env=envs)
@@ -166,7 +183,7 @@ def get_by_asan(args: List[str], verbose: bool, use_stdin: bool, repeat: int, ti
                     continue
                 if "BuildId" in ln:
                     ln = " ".join(ln.strip().split(" ")[:-2])
-                tks = re.findall(r"#(\d+) [0-9xabcdef]+ in (.+) (.+)", ln)
+                tks = re.findall(r"#(\d+) ([0-9xabcdef]+) in (.+) (.+)", ln)
 
                 if len(tks) == 0:
                     if len(backtrace) != 0 and in_error:
@@ -178,42 +195,20 @@ def get_by_asan(args: List[str], verbose: bool, use_stdin: bool, repeat: int, ti
                         region_trace = []
                     continue
                 tks = tks[0]
-                ln_tks = tks[2].split(":")
+                ln_tks = tks[3].split(":")
                 if len(ln_tks) > 1:
                     ln_num = int(ln_tks[1])
-                    src = Path(ln_tks[0]).name
                     if Path(ln_tks[0]).exists():
-                        try:
-                            fcontent = open(ln_tks[0]).read().split("\n")
-                        except Exception:
-                            lncontent = f"Fail to load {ln_tks[0]}:{ln_num}"
-                        else:
-                            lncontent = fcontent[ln_num - 1]
+                        src = str(Path(ln_tks[0]).absolute())
                     else:
-                        lncontent = "<No available source>"
+                        src = ln_tks[0] # ??
                 else: 
-                    path_tks = re.findall(r"\((.*)\+([0-9xabcdef]+)\)", tks[2])
-                    ln_num = 0
-                    if len(path_tks) == 1 and len(path_tks[0]) == 2:
-                        src_path, offset = path_tks[0]
-                        src = f"{Path(src_path).name}+{offset}"
-                        lncontent = "<No available source>"
-                    else:
-                        src = Path(ln_tks[0]).name
-                        if Path(ln_tks[0]).exists():
-                            try:
-                                fcontent = open(ln_tks[0]).read().split("\n")
-                            except Exception:
-                                lncontent = f"Fail to load {ln_tks[0]}:{ln_num}"
-                            else:
-                                lncontent = fcontent[ln_num - 1]
-                        else:
-                            lncontent = "<No available source>"
+                    ln_num = None
+                    src = ln_tks[0]
                 if in_error:
-                    backtrace.append((tks[1], src, ln_num))
-                    meta["lines"].append(lncontent)
+                    backtrace.append((tks[1], tks[2], src, ln_num))
                 else:
-                    region_trace.append((tks[1], src, ln_num))
+                    region_trace.append((tks[1], tks[2], src, ln_num))
 
         if len(return_backtrace) != 0:
             return return_backtrace, meta
@@ -222,17 +217,15 @@ def get_by_asan(args: List[str], verbose: bool, use_stdin: bool, repeat: int, ti
 
 if __name__ == "__main__":
     p = ArgumentParser("afl-btmin")
-    p.add_argument("--input", required=True, type=str, help="The AFL fuzzing output directory")
-    p.add_argument("--filter", type=str, help="Filter for crashes")
     p.add_argument("--verbose", default=False, action="store_true", help="Verbose logging")
-    p.add_argument("--top", default=3, type=int, help="Use top N frames to dedup")
+    p.add_argument("--top", default=10, type=int, help="Use top N frames to dedup")
     p.add_argument("--asan", type=str, help="ASAN binary for sanitizer crashes")
     p.add_argument("--msan", type=str, help="MSAN binary for sanitizer crashes")
     p.add_argument("--ubsan", type=str, help="UBSAN binary (can be recovered!)")
     p.add_argument("--timeout", type=int, default=5, help="Timeout for a single run")
     p.add_argument("--repeat", type=int, default=5, help="Repeat execution in case the crash is not stable")
     p.add_argument("--no-gdb", default=False, action="store_true", help="No gdb")
-    p.add_argument("--meta", default=False, action="store_true", help="Store extra meta")
+    p.add_argument("--stdin", type=str, action="store_true", help="use stdin")
     p.add_argument("--sequence", type=str, default="uam", help="sequence of the sanitizers")
 
     program_args = None
@@ -269,115 +262,43 @@ if __name__ == "__main__":
         logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(message)s', force=True)
 
     if not args.no_gdb:
-        remove_shm_from_resource_tracker()
         shm_name = f"afl-btmin-{os.getpid()}"
         shm = SharedMemory(name=shm_name, create=True, size=SHM_SIZE)
     try:
-        bts: Mapping[Tuple, List[str]]  = {}
-        metas: Mapping[Tuple, dict] = {}
-        cnt = 0
+        actual_args = program_args[:]
+        san_only_crash = False
+        backtrace = None
+        for san in sans:
+            if san is not None:
+                actual_args[0] = san
+                backtrace, meta = get_by_asan(actual_args, args.verbose, args.stdin, repeat, args.timeout)
+                if backtrace is not None:
+                    logging.info(f"Got backtrace {backtrace} from {san}")
+                    # if meta is not None and "out_san" in meta and "ubsan" in meta['out_san']:
+                    #     backtrace = backtrace[:1]
+                    if meta is not None:
+                        meta['san'] = san
+                    break       
 
-        for fname in os.listdir(Path(args.input)):
-            crash_fname = Path(args.input) / fname
-            cnt += 1
+        if backtrace is None and not args.no_gdb:
+            actual_args[0] = program_args[0]
+            gdb_bt = get_by_gdb(actual_args, shm, args.verbose, args.stdin, repeat, args.timeout, shm_name)
+            if gdb_bt is not None:
+                backtrace = gdb_bt
             
-            if cnt % 100 == 0:
-                sys.stderr.write(f"mimizing {cnt}th output from {args.input}...\n")
+        n_frame = int(args.top)
+        backtrace = tuple(backtrace[:n_frame])
 
-            if crash_fname.is_file() and "id:" in fname:
-                
-                if args.filter is not None:
-                    if re.match(args.filter, fname) is None:
-                        logging.warning(f"{fname} is skipped")
-                        continue
-                    
-                actual_args = []
-                use_stin = "@@" not in program_args
-                for arg in program_args:
-                    if arg == "@@":
-                        actual_args.append(str(crash_fname.absolute()))
-                    else:
-                        actual_args.append(arg)
-
-                san_only_crash = False
-                backtrace = None
-                for san in sans:
-                    if san is not None:
-                        actual_args[0] = san
-                        backtrace, meta = get_by_asan(actual_args, args.verbose, use_stin, repeat, args.timeout)
-                        if backtrace is not None:
-                            logging.info(f"Got backtrace {backtrace} from {san}")
-                            san_only_crash = True
-                            # if meta is not None and "out_san" in meta and "ubsan" in meta['out_san']:
-                            #     backtrace = backtrace[:1]
-                            if meta is not None:
-                                meta['san'] = san
-                            break       
-
-                if not args.no_gdb:
-                    actual_args[0] = program_args[0]
-                    gdb_bt = get_by_gdb(actual_args, shm, args.verbose, use_stin, repeat, args.timeout, shm_name)
-                    if gdb_bt is not None:
-                        san_only_crash = False
-                        if backtrace is None:
-                            backtrace = gdb_bt
-                
-                if backtrace is None or len(backtrace) == 0:
-                    logging.warning(f"Fail to get backtrace for {crash_fname}, skipped")
-                    continue
-                    
-                n_frame = int(args.top)
-                backtrace = tuple(backtrace[:n_frame])
-                logging.info(f"Stack trace {fname}: {backtrace}")
-                if backtrace not in bts:
-                    bts[backtrace] = []
-                bts[backtrace].append((fname, san_only_crash))
-                metas[backtrace] = meta
-
-        # check if all backtraces are of the same length
-        min_length = int(args.top)
-        for bt in bts.keys():
-            if len(bt) < min_length:
-                min_length = len(bt)
-        
-        new_bts = {}
-        new_meta = {}
-        for bt, names in bts.items():
-            new_bt = bt[:min_length]
-            if new_bt not in new_bts:
-                new_bts[new_bt] = []
-            new_bts[new_bt].extend(names)
-            new_meta[new_bt] = metas[bt]
-        
-        bts = new_bts
-        metas = new_meta
-        
-        sys.stderr.write(f"{len(bts)} unique backtrace found\n")
-
-        bt_dir = Path(args.input) / "backtraces"
-        shutil.rmtree(bt_dir, ignore_errors=True)
-        os.makedirs(bt_dir, exist_ok=True)
-        bt_id = 0
-        for bt, fnames in bts.items():
-            with open(bt_dir / f"{str(bt_id)}.json", "w+") as f:
-                json.dump(bt, f, indent=4)
-
-            if args.meta:
-                with open(bt_dir / f"{str(bt_id)}.json.meta", "w+") as f:
-                    json.dump(new_meta[bt], f, indent=4)
-            
-            for fname, san_only in fnames:
-                suffix = Path(fname).suffix
-                stem = Path(fname).stem
-                new_fname = ",".join([tk for tk in stem.split(",") if 'bt' not in tk and 'sanonly' not in tk])
-                if san_only:
-                    n = f"{new_fname},+sanonly,bt:{bt_id}{suffix}"
-                else:
-                    n = f"{new_fname},bt:{bt_id}{suffix}"
-                shutil.move(Path(args.input) / fname, Path(args.input) / n)
-            
-            bt_id += 1
-        
+        out = {
+            "backtraces": [{
+                "pc": bt[0],
+                "function": bt[1],
+                "source": bt[2],
+                "line": bt[3]
+            } for bt in backtrace],
+            "meta": meta
+        }
+        print(json.dumps(out, indent=2))
     finally:
         if not args.no_gdb:
             shm.close()
