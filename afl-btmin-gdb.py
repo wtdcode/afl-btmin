@@ -113,10 +113,17 @@ class FrameFilter():
             ln = frame.line()
             if self.__debug:
                 print(f"func: {func} fname: {fname} ln: {ln}")
-
+                
             if fname is not None:
                 if Path(fname).exists():
                     fname = str(Path(fname).absolute())
+                else:
+                    ifr = frame.inferior_frame()
+                    sal = ifr.find_sal()
+                    if sal.symtab is not None:
+                        full_name = sal.symtab.fullname()
+                        if Path(full_name).exists():
+                            fname = full_name
             address = frame.address()
             backtraces.append((address, func, fname, ln))
         

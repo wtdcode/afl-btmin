@@ -135,7 +135,6 @@ def get_by_asan(args: List[str], verbose: bool, use_stdin: Optional[str], repeat
     if "UBSAN_OPTIONS" not in envs:
         envs["UBSAN_OPTIONS"] = "halt_on_error=1:abort_on_error=1:print_stacktrace=1"
     meta = {
-        "lines": [],
         "regions": [],
         "out_san": []
     }
