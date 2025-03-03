@@ -225,7 +225,7 @@ if __name__ == "__main__":
     p.add_argument("--timeout", type=int, default=5, help="Timeout for a single run")
     p.add_argument("--repeat", type=int, default=5, help="Repeat execution in case the crash is not stable")
     p.add_argument("--no-gdb", default=False, action="store_true", help="No gdb")
-    p.add_argument("--stdin", type=str, action="store_true", help="use stdin")
+    p.add_argument("--stdin", type=str, help="use stdin")
     p.add_argument("--sequence", type=str, default="uam", help="sequence of the sanitizers")
 
     program_args = None
