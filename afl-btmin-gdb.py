@@ -78,12 +78,15 @@ class FrameFilter():
         self.name = "afl-btmin"
         self.priority = 100
         self.enabled = True
+        self.__debug = "BTMIN_DEBUG" in os.environ
         gdb.frame_filters[self.name] = self
 
     def _gen_backtrace(self, frames: List[FrameDecorator]):
         backtraces = []
 
         for frame in frames:
+            if self.__debug:
+                print(f"frame is {frame}")
             func = frame.function()
             fname = frame.filename()
             ln = frame.line()
@@ -98,14 +101,15 @@ class FrameFilter():
 
     def filter(self, it):
         shm = load_shm()
-        if shm is not None:
+        if shm is not None or self.__debug:
             it1, it2 = tee(it)
             backtrace =  self._gen_backtrace(list(it2))
-            bs = pickle.dumps(backtrace)
-            shm.buf[:8] = struct.pack("<Q", len(bs))
-            shm.buf[8:len(bs) + 8] = bs
-            print(f"Wrote {len(bs) + 8} bytes: {binascii.hexlify(shm.buf[:16])}")
-            shm.close()
+            if shm:
+                bs = pickle.dumps(backtrace)
+                shm.buf[:8] = struct.pack("<Q", len(bs))
+                shm.buf[8:len(bs) + 8] = bs
+                print(f"Wrote {len(bs) + 8} bytes: {binascii.hexlify(shm.buf[:16])}")
+                shm.close()
             return it1
         else:
             print("Warning: no shared memory is detected")
