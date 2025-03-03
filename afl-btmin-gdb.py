@@ -61,7 +61,7 @@ def load_shm():
         shm_name = os.getenv("AFL_BTMIN_SHM")
         if shm_name is None:
             return None
-        shm = SharedMemory(name=shm_name, create=False)
+        shm = SharedMemory(name=shm_name, create=False, track=False)
         v = struct.unpack("<Q", shm.buf[:8])[0]
         if v != 114514:
             print("Fail to verfiy the shared memory")
